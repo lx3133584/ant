@@ -172,7 +172,7 @@ A relation that still holds what was loaded does not touch the foreign key, so `
 
 ## 33. Include shape functions
 
-`Include` takes an optional function over the related query, instead of separate APIs for filtering, ordering, limiting, and nesting. `Limit` and `Offset` apply per parent, using `ROW_NUMBER`. `Each` refuses includes with `ErrIncludeInEach`, because a second query cannot run on a connection that is streaming rows inside a transaction.
+`Include` takes an optional function over the related query, instead of separate APIs for filtering, ordering, limiting, and nesting. `Limit` and `Offset` apply per parent, using `ROW_NUMBER`. `Each` refuses includes with `ErrIncludeInEach`, because a second query cannot run on a connection that is streaming rows inside a transaction. An include matches rows by a column on each side, so both queries read theirs even when `Column` or `Omit` left it out, the type column of a polymorphic relation included: without it every parent looked childless, with no error (#160).
 
 ## 34. Self-joins
 
