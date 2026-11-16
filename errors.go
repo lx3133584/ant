@@ -55,8 +55,8 @@ var (
 	ErrNoAssignment = errors.New("ant: update has no assignments")
 	// ErrThenWithoutOrder reports ThenBy on a query with no OrderBy.
 	ErrThenWithoutOrder = errors.New("ant: ThenBy needs a preceding OrderBy")
-	// ErrIncludeInEach reports Include with Each, which would need a second
-	// query while rows stream. Use All, or Chunk for large results.
+	// ErrIncludeInEach reports Include or IncludeJoined with Each, which would
+	// need a second query while rows stream. Use All, or Chunk for large results.
 	ErrIncludeInEach = errors.New("ant: Each does not support Include")
 	// ErrConcurrency reports that SaveChanges found a row changed or removed
 	// since it was loaded. Nothing was saved.
@@ -86,7 +86,9 @@ var (
 	ErrTxDone = errors.New("ant: transaction has ended")
 	// ErrTxType reports a Tx closure whose parameter is not this context's type.
 	ErrTxType = errors.New("ant: Tx closure takes a different context type")
-	// ErrIncludeInSubquery reports a query with Include used as a subquery.
+	// ErrIncludeInSubquery reports a query with Include or IncludeJoined used as
+	// a subquery, a member of a set operation, or the source of From, FromCTE,
+	// Recursive, or JoinSub.
 	ErrIncludeInSubquery = errors.New("ant: subquery cannot use Include")
 	// ErrCursor reports a cursor that this query cannot use.
 	ErrCursor = errors.New("ant: invalid cursor")
