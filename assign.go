@@ -88,10 +88,44 @@ func SetExpr[V any](field *V, value Expr[V]) Assignment {
 	}
 
 	return Assignment{
-		node:  qb.Assignment{Column: f.Column, Value: value.node},
+		node:  qb.Assignment{Column: f.Column, Value: castCaseIntoEnum(value.node, f.Storage.Enum)},
 		model: model,
 		refs:  value.refs,
 	}
+}
+
+// castCaseIntoEnum casts the parameters of a CASE to the enum type the column
+// declares. PostgreSQL resolves an unknown parameter inside a CASE to text, and
+// text does not assign to an enum column, so the caller would otherwise have to
+// write the cast on every value.
+func castCaseIntoEnum(node qb.Expr, enum *meta.Enum) qb.Expr {
+	if enum == nil || enum.Name == "" {
+		return node
+	}
+
+	c, ok := node.(qb.Case)
+	if !ok {
+		return node
+	}
+
+	cast := func(e qb.Expr) qb.Expr {
+		if _, isParam := e.(qb.Param); !isParam {
+			return e
+		}
+
+		return qb.Cast{Value: e, Type: enum.Name}
+	}
+
+	out := qb.Case{Else: cast(c.Else)}
+
+	if len(c.Whens) > 0 {
+		out.Whens = make([]qb.When, len(c.Whens))
+		for i, w := range c.Whens {
+			out.Whens[i] = qb.When{If: w.If, Then: cast(w.Then)}
+		}
+	}
+
+	return out
 }
 
 // Inc adds n to a numeric column, in the database.
