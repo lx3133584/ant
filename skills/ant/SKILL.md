@@ -234,7 +234,8 @@ wrote, err := db.Users.Upsert(ctx, alice, ant.OnConflict(&Users.Email))
   thousands of rows.
 - Bulk `Update` and `Delete` run no hooks and don't change tracked structs.
 - `FirstOrCreate(ctx, entity, conds...)` reads or inserts, safely under races when
-  the condition is on a unique column.
+  the condition is on a unique column. In a transaction, a row another writer
+  inserted first is read `FOR UPDATE`, so changing it next cannot deadlock.
 - Constraint errors are the same on every database: `ant.IsUniqueViolation(err)`,
   `ant.IsForeignKeyViolation(err)`, `ant.IsRetryable(err)`.
 

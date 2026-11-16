@@ -62,6 +62,8 @@ Error helpers mean the same everywhere. `ant.IsUniqueViolation` works on all fiv
 
 **Retries.** `ant.IsRetryable`, and so `ant.Attempts`, take deadlocks and serialization failures on every database: `40001` and `40P01` on PostgreSQL, deadlocks on MySQL and MariaDB, error 1020 on MariaDB, which from 11.6 rolls a transaction back when a row it reads changed since its snapshot, deadlocks on SQL Server, and a busy database on SQLite.
 
+**`FirstOrCreate` in a transaction.** When another writer inserted the row first, it is read `FOR UPDATE`, so changing it next takes no further lock. On MySQL and MariaDB the insert that lost already holds a share lock on that row, so two such transactions can still deadlock there (MariaDB: error 1020); the error is retryable, so run them with `ant.Attempts`.
+
 **Writers at once on SQLite.** SQLite has one writer at a time. A second connection that writes fails at once with "database is locked" unless the DSN makes it wait, and a transaction that reads and then writes can fail even then, unless it takes the write lock when it begins: use `_pragma=busy_timeout(5000)&_txlock=immediate`. `PRAGMA journal_mode=WAL` lets readers go on while one writes; it stays with the file, so run it once rather than in the DSN, where every new connection would need the write lock to set it.
 
 **Paging on SQL Server.** `OFFSET ... FETCH` needs an `ORDER BY`, so ant adds a meaningless one if the query has none. SQL Server refuses a `Limit` of zero.

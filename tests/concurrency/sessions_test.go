@@ -422,31 +422,44 @@ func TestFirstOrCreateRace(t *testing.T) {
 // Get-or-create and then change the row is the common use. The workers that
 // lose the insert read the winner's row; if they each held a share lock, both
 // would wait to upgrade it for the update, and the database would kill one as a
-// deadlock. No retries here, so any deadlock fails the test.
+// deadlock. No retries here, so any deadlock fails the test, except on MySQL
+// and MariaDB, where the insert that lost already holds a share lock on the
+// row, so losers conflict whatever the read takes: there the conflict must be
+// one a retry gets past, and not the insert's duplicate key.
 func TestFirstOrCreateThenUpdate(t *testing.T) {
 	each(t, func(t *testing.T, target testdb.Target) {
 		db := shared(t, target)
 		ctx := t.Context()
 
+		attempts := 1
+
+		if target.Name == "mysql" || target.Name == "mariadb" {
+			attempts = 30
+		}
+
 		for round := range 4 {
 			name := fmt.Sprintf("then-update-%d", round)
 
 			errs := workers(30, func(w int) error {
-				return db.Tx(ctx, func(tx *BankDB) error {
-					got, _, err := tx.Counters.FirstOrCreate(
-						ctx,
-						&Counter{Name: name},
-						ant.Eq(&Counters.Name, name),
-					)
-					if err != nil {
+				return db.Tx(
+					ctx,
+					func(tx *BankDB) error {
+						got, _, err := tx.Counters.FirstOrCreate(
+							ctx,
+							&Counter{Name: name},
+							ant.Eq(&Counters.Name, name),
+						)
+						if err != nil {
+							return err
+						}
+
+						_, err = tx.Counters.Where(ant.Eq(&Counters.Name, got.Name)).
+							Update(ctx, ant.Set(&Counters.Hits, got.Hits+1))
+
 						return err
-					}
-
-					_, err = tx.Counters.Where(ant.Eq(&Counters.Name, got.Name)).
-						Update(ctx, ant.Set(&Counters.Hits, got.Hits+1))
-
-					return err
-				}, ant.Attempts(1))
+					},
+					ant.Attempts(attempts),
+				)
 			})
 			noErrors(t, errs)
 		}
