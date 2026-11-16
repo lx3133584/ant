@@ -3,7 +3,6 @@ package scan
 
 import (
 	"database/sql"
-	"fmt"
 	"reflect"
 	"time"
 	"unsafe"
@@ -32,47 +31,56 @@ func For[T any](rows *sql.Rows) (func(*T) error, error) {
 		fields[i] = model.Column(c)
 	}
 
+	// The columns holding an instant, found once: a row moves only these, and
+	// every other column costs what it did before.
+	times := make([]*meta.Field, 0, len(columns))
+
+	for _, f := range fields {
+		if f != nil && (f.Type == timeType || f.Type == timeSliceType) {
+			times = append(times, f)
+		}
+	}
+
 	dest := make([]any, len(columns))
 
 	return func(dst *T) error {
 		for i, f := range fields {
-			switch {
-			case f == nil:
+			if f == nil {
 				dest[i] = new(any)
-			case f.Type == timeType:
-				dest[i] = (*utcTime)(f.Addr(unsafe.Pointer(dst)).(*time.Time))
-			default:
-				dest[i] = f.Addr(unsafe.Pointer(dst))
+
+				continue
+			}
+
+			dest[i] = f.Addr(unsafe.Pointer(dst))
+		}
+
+		// Scanned first, moved to UTC after: what the column holds is
+		// database/sql's to read, and a NULL or a value no time comes from is
+		// refused there, as it is for any other field.
+		if err := rows.Scan(dest...); err != nil {
+			return err
+		}
+
+		for _, f := range times {
+			switch f.Type {
+			case timeType:
+				one := (*time.Time)(unsafe.Add(unsafe.Pointer(dst), f.Offset))
+				*one = one.UTC()
+			case timeSliceType:
+				slice := *(*[]time.Time)(unsafe.Add(unsafe.Pointer(dst), f.Offset))
+				for i := range slice {
+					slice[i] = slice[i].UTC()
+				}
 			}
 		}
 
-		return rows.Scan(dest...)
+		return nil
 	}, nil
 }
 
 // timeType is time.Time, which a dialect may hand back in another zone.
 var timeType = reflect.TypeFor[time.Time]()
 
-// utcTime scans a time and stores it in UTC. The drivers disagree: pgx decodes
-// TIMESTAMPTZ into the process's local zone, while MySQL and SQLite return UTC,
-// so without this the same row reads back as two different Go values.
-type utcTime time.Time
-
-func (t *utcTime) Scan(src any) error {
-	var v time.Time
-
-	switch s := src.(type) {
-	case time.Time:
-		v = s
-	case nil:
-		*t = utcTime(time.Time{})
-
-		return nil
-	default:
-		return fmt.Errorf("ant: cannot scan %T into time.Time", src)
-	}
-
-	*t = utcTime(v.UTC())
-
-	return nil
-}
+// timeSliceType is []time.Time, a column of instants on the databases that have
+// array columns. Its elements need what a single time needs.
+var timeSliceType = reflect.TypeFor[[]time.Time]()
