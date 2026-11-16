@@ -86,6 +86,12 @@ var (
 	ErrTxDone = errors.New("ant: transaction has ended")
 	// ErrTxType reports a Tx closure whose parameter is not this context's type.
 	ErrTxType = errors.New("ant: Tx closure takes a different context type")
+	// ErrNestedIsolation reports Isolation on a Tx nested in another Tx. A
+	// nested Tx is a savepoint, and the isolation level of a transaction cannot
+	// change once it has begun, so the option would be dropped.
+	ErrNestedIsolation = errors.New(
+		"ant: Isolation cannot be set on a Tx nested in another Tx; set it on the outer Tx",
+	)
 	// ErrIncludeInSubquery reports a query with Include used as a subquery.
 	ErrIncludeInSubquery = errors.New("ant: subquery cannot use Include")
 	// ErrCursor reports a cursor that this query cannot use.

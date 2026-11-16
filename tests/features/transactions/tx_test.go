@@ -296,6 +296,39 @@ func TestNestedTx(t *testing.T) {
 	})
 }
 
+// Options on a Tx nested in another Tx must not vanish: a read-only guard that
+// disappears once the caller is already in a transaction is worse than an
+// error, because the write it was meant to stop goes through.
+func TestNestedTxOptions(t *testing.T) {
+	fixture.Run(t, func(t *testing.T, db *AppDB) {
+		ctx := t.Context()
+
+		t.Run("ReadOnly on a nested Tx still blocks a write", func(t *testing.T) {
+			err := db.Tx(ctx, func(outer *AppDB) error {
+				return outer.Tx(
+					ctx,
+					func(inner *AppDB) error {
+						return inner.Users.InsertOnly(ctx, user("nested read only"))
+					},
+					ant.ReadOnly(),
+				)
+			})
+			require.ErrorContains(t, err, "read-only")
+		})
+
+		t.Run("Isolation on a nested Tx is refused rather than ignored", func(t *testing.T) {
+			err := db.Tx(ctx, func(outer *AppDB) error {
+				return outer.Tx(
+					ctx,
+					func(*AppDB) error { return nil },
+					ant.Isolation(sql.LevelSerializable),
+				)
+			})
+			require.ErrorIs(t, err, ant.ErrNestedIsolation)
+		})
+	})
+}
+
 // Begin hands you the transaction to end yourself.
 func TestBegin(t *testing.T) {
 	fixture.RunTracked(t, func(t *testing.T, db *AppDB) {

@@ -305,6 +305,30 @@ func (s *state) transact(ctx context.Context, several bool, write func(exec.Exec
 	return t.commit()
 }
 
+// nestedTx runs f in a savepoint, honouring the options it was given. A
+// savepoint cannot carry options of its own: read-only is the one PostgreSQL
+// allows to change inside a transaction, and an isolation level cannot change
+// there at all. Dropping either silently would remove a guard exactly when the
+// caller believed it was adding one.
+func (s *state) nestedTx[DB any](ctx context.Context, f func(tx *DB) error, o txOptions) error {
+	if o.sql.Isolation != 0 {
+		return ErrNestedIsolation
+	}
+
+	if !o.sql.ReadOnly {
+		return s.savepoint(ctx, func() error { return f(s.self.(*DB)) })
+	}
+
+	return s.savepoint(ctx, func() error {
+		if _, err := s.exec.ExecContext(ctx, "SET TRANSACTION READ ONLY"); err != nil {
+			return err
+		}
+
+		return f(s.self.(*DB))
+	})
+}
+
+// savepoint runs body in a savepoint ant opens in the transaction s is in.
 func (s *state) savepoint(ctx context.Context, body func() error) error {
 	sp, err := s.openSavepoint(ctx)
 	if err != nil {
@@ -535,7 +559,7 @@ func (c *Context) Tx[DB any](ctx context.Context, f func(tx *DB) error, options 
 	}
 
 	if s.tx != nil {
-		return s.savepoint(ctx, func() error { return f(s.self.(*DB)) })
+		return s.nestedTx(ctx, f, resolveTx(options))
 	}
 
 	o := resolveTx(options)

@@ -585,6 +585,7 @@ ant: var ErrIncludeInSubquery
 ant: var ErrKeyChanged
 ant: var ErrKeyType
 ant: var ErrMultipleRows
+ant: var ErrNestedIsolation
 ant: var ErrNilEntity
 ant: var ErrNoAssignment
 ant: var ErrNoColumnType
