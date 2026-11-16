@@ -39,6 +39,16 @@ type Appender interface {
 	AppendPlaceholder(dst []byte, n int) []byte
 }
 
+// DSNChecker is implemented by a dialect whose driver needs an option in the
+// data source name for its rows to scan into the types ant maps columns to.
+// Open calls it before connecting, so a DSN that would fail on the first read
+// is refused where it is written rather than at the first query that scans a
+// column the option governs.
+type DSNChecker interface {
+	// CheckDSN reports what the data source name is missing, or nil.
+	CheckDSN(dsn string) error
+}
+
 // QuoteWith wraps ident in open and close, doubling any embedded close.
 func QuoteWith(ident, open, close string) string {
 	return open + strings.ReplaceAll(ident, close, close+close) + close

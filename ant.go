@@ -154,6 +154,12 @@ func Open[DB any](
 		return nil, fmt.Errorf("%w: %T", ErrNoContext, new(DB))
 	}
 
+	if checker, ok := d.(dialect.DSNChecker); ok {
+		if err := checker.CheckDSN(dsn); err != nil {
+			return nil, err
+		}
+	}
+
 	pool, err := sql.Open(d.DriverName(), dsn)
 	if err != nil {
 		return nil, err

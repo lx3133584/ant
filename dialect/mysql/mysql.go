@@ -5,6 +5,7 @@ package mysql
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/go-sql-driver/mysql"
 
@@ -67,6 +68,27 @@ type impl struct {
 
 func (d impl) Name() string     { return d.name }
 func (impl) DriverName() string { return "mysql" }
+
+// CheckDSN refuses a data source name without parseTime. The driver returns
+// DATE and TIMESTAMP as []byte unless it is set, and ant maps those columns to
+// time.Time, so without it the writes succeed and the first read of such a
+// column fails with a scan error that names neither the setting nor the fix.
+func (impl) CheckDSN(dsn string) error {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return fmt.Errorf("ant: mysql: %w", err)
+	}
+
+	if !cfg.ParseTime {
+		return errors.New(
+			"ant: mysql: the data source name needs parseTime=true; " +
+				"without it the driver returns time columns as []byte, " +
+				"and every read of one fails to scan",
+		)
+	}
+
+	return nil
+}
 
 func (impl) Placeholder(n int) string { return "?" }
 
