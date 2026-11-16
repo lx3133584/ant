@@ -722,9 +722,9 @@ func (t *Table[T]) InsertFrom(ctx context.Context, rows *Projection[T]) (int64, 
 // FirstOrCreate returns the first row that meets conds, or inserts e and returns
 // it. If another writer inserts a matching row first and a unique constraint
 // stops this insert, it returns that row. In a transaction, on a database with
-// row locks, it reads that row with FOR SHARE, or FOR UPDATE on MariaDB, since
-// the transaction's snapshot may not show it. The bool reports whether e was
-// created.
+// row locks, it reads that row with FOR UPDATE, since the transaction's
+// snapshot may not show it, and the row stays locked until the transaction
+// ends, ready to change. The bool reports whether e was created.
 func (t *Table[T]) FirstOrCreate(ctx context.Context, e *T, conds ...Cond) (*T, bool, error) {
 	if e == nil {
 		return nil, false, ErrNilEntity
@@ -759,21 +759,23 @@ func (t *Table[T]) FirstOrCreate(ctx context.Context, e *T, conds ...Cond) (*T, 
 
 	// In a transaction, the row that stopped the insert may have committed after
 	// the transaction's snapshot, which a plain read at MySQL's REPEATABLE READ
-	// does not see. A locking read sees the newest row.
-	if syntax := dialect.SyntaxOf(
-		t.state.dialect,
-	); t.state.tx != nil &&
-		!syntax.Lacks(dialect.RowLocks) {
-		if syntax.Lacks(dialect.ShareLocks) {
-			q = q.ForUpdate()
-		} else {
-			q = q.ForShare()
-		}
+	// does not see. A locking read sees the newest row. It locks for update, not
+	// share: the caller usually changes the row next, and two transactions that
+	// each hold a share lock on it deadlock when both try to upgrade it.
+	if t.state.tx != nil && dialect.Supports(t.state.dialect, dialect.RowLocks) {
+		q = q.ForUpdate()
 	}
 
+	// A row that is still not there, as when the conflict was on another
+	// unique column, leaves the insert's error. Any other failure of the read
+	// is its own, such as a deadlock that a retry can get past.
 	found, err = q.First(ctx)
-	if err != nil {
+	if errors.Is(err, ErrNotFound) {
 		return nil, false, created
+	}
+
+	if err != nil {
+		return nil, false, err
 	}
 
 	return found, false, nil
