@@ -3,7 +3,9 @@ package scan
 
 import (
 	"database/sql"
+	"fmt"
 	"reflect"
+	"time"
 	"unsafe"
 
 	"github.com/skudra-go/ant/internal/meta"
@@ -34,13 +36,43 @@ func For[T any](rows *sql.Rows) (func(*T) error, error) {
 
 	return func(dst *T) error {
 		for i, f := range fields {
-			if f == nil {
+			switch {
+			case f == nil:
 				dest[i] = new(any)
-			} else {
+			case f.Type == timeType:
+				dest[i] = (*utcTime)(f.Addr(unsafe.Pointer(dst)).(*time.Time))
+			default:
 				dest[i] = f.Addr(unsafe.Pointer(dst))
 			}
 		}
 
 		return rows.Scan(dest...)
 	}, nil
+}
+
+// timeType is time.Time, which a dialect may hand back in another zone.
+var timeType = reflect.TypeFor[time.Time]()
+
+// utcTime scans a time and stores it in UTC. The drivers disagree: pgx decodes
+// TIMESTAMPTZ into the process's local zone, while MySQL and SQLite return UTC,
+// so without this the same row reads back as two different Go values.
+type utcTime time.Time
+
+func (t *utcTime) Scan(src any) error {
+	var v time.Time
+
+	switch s := src.(type) {
+	case time.Time:
+		v = s
+	case nil:
+		*t = utcTime(time.Time{})
+
+		return nil
+	default:
+		return fmt.Errorf("ant: cannot scan %T into time.Time", src)
+	}
+
+	*t = utcTime(v.UTC())
+
+	return nil
 }

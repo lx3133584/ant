@@ -175,3 +175,21 @@ func TestNoTimestamps(t *testing.T) {
 		require.True(t, row.CreatedAt.IsZero())
 	})
 }
+
+// A row read back must carry the same instant in the same zone as the one that
+// was written. Otherwise a JSON API renders a create as ...Z and a get as
+// +02:00, and comparing the two entities fails across a round trip.
+func TestTimesReadBackInUTC(t *testing.T) {
+	fixture.Run(t, func(t *testing.T, db *fixture.AppDB) {
+		ctx := t.Context()
+
+		row := fixture.User{Name: "zone", Email: "zone@example.com", Age: 1}
+		require.NoError(t, db.Users.Insert(ctx, &row))
+
+		back, err := db.Users.NoTracking().Find(ctx, row.ID)
+		require.NoError(t, err)
+
+		require.Equal(t, time.UTC, back.CreatedAt.Location(), "a scanned time must be UTC")
+		require.Equal(t, row.CreatedAt, back.CreatedAt, "the two must be identical, not merely the same instant")
+	})
+}
