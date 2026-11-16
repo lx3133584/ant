@@ -10,12 +10,23 @@ import (
 	"github.com/skudra-go/ant/tests/features/fixture"
 )
 
+// namedNames is a slice of a named string type, which the driver cannot encode
+// as an array on its own.
+type namedNames []string
+
+// namedStatuses stands in for a slice of an enum element type.
+type namedStatuses []CampaignStatus
+
+// CampaignStatus is the named element type from the report.
+type CampaignStatus string
+
 // Raw SQL can use ? instead of $1, and a slice fills an IN list.
 func TestRawArguments(t *testing.T) {
 	fixture.Run(t, func(t *testing.T, db *fixture.AppDB) {
 		fixture.Seed(t, db)
 		ctx := t.Context()
 		ages := []int{17, 30}
+		namedNames := namedNames{"Alice", "Bob"}
 
 		t.Run("? is a placeholder", func(t *testing.T) {
 			got, err := ant.Raw[string](
@@ -86,6 +97,33 @@ func TestRawArguments(t *testing.T) {
 			).All(ctx)
 			require.NoError(t, err)
 			require.Equal(t, []string{"Alice", "Bob"}, got)
+		})
+
+		t.Run("a slice of a named type is one array value", func(t *testing.T) {
+			got, err := ant.Raw[string](
+				db,
+				`SELECT name FROM users WHERE name = ANY(?) ORDER BY name`,
+				namedNames,
+			).All(ctx)
+			require.NoError(t, err)
+			require.Equal(t, []string{"Alice", "Bob"}, got)
+		})
+
+		t.Run("a slice of a named type bound to an enum array", func(t *testing.T) {
+			_, err := ant.Raw[any](db, `CREATE TYPE campaign_status AS ENUM ('draft', 'live')`).Exec(ctx)
+			require.NoError(t, err)
+			_, err = ant.Raw[any](db, `CREATE TEMP TABLE campaigns (status campaign_status NOT NULL)`).Exec(ctx)
+			require.NoError(t, err)
+			_, err = ant.Raw[any](db, `INSERT INTO campaigns (status) VALUES ('draft')`).Exec(ctx)
+			require.NoError(t, err)
+
+			got, err := ant.Raw[int64](
+				db,
+				`SELECT count(*) FROM campaigns WHERE status = ANY(?)`,
+				namedStatuses{CampaignStatus("draft")},
+			).First(ctx)
+			require.NoError(t, err)
+			require.Equal(t, int64(1), *got)
 		})
 
 		t.Run("the jsonb ? operator still works", func(t *testing.T) {

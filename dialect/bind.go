@@ -553,7 +553,7 @@ type binder struct {
 // value writes the placeholders for v, given the query text after it, and
 // returns what it wrote.
 func (b *binder) value(v any, rest string) string {
-	values := []any{v}
+	values := []any{unnameSlice(v)}
 
 	if list, ok := expandable(v); ok && insideIn(b.out.String(), rest) {
 		values = list
@@ -576,6 +576,81 @@ func (b *binder) value(v any, rest string) string {
 	b.out.WriteString(text)
 
 	return text
+}
+
+// basicType returns the unnamed type of a basic kind, or nil for a kind that
+// has no plain form the driver could encode.
+func basicType(k reflect.Kind) reflect.Type {
+	switch k {
+	case reflect.Bool:
+		return reflect.TypeOf(false)
+	case reflect.Int:
+		return reflect.TypeOf(int(0))
+	case reflect.Int8:
+		return reflect.TypeOf(int8(0))
+	case reflect.Int16:
+		return reflect.TypeOf(int16(0))
+	case reflect.Int32:
+		return reflect.TypeOf(int32(0))
+	case reflect.Int64:
+		return reflect.TypeOf(int64(0))
+	case reflect.Uint:
+		return reflect.TypeOf(uint(0))
+	case reflect.Uint16:
+		return reflect.TypeOf(uint16(0))
+	case reflect.Uint32:
+		return reflect.TypeOf(uint32(0))
+	case reflect.Uint64:
+		return reflect.TypeOf(uint64(0))
+	case reflect.Float32:
+		return reflect.TypeOf(float32(0))
+	case reflect.Float64:
+		return reflect.TypeOf(float64(0))
+	case reflect.String:
+		return reflect.TypeOf("")
+	}
+
+	return nil
+}
+
+// unnameSlice converts a slice of a named basic type to a slice of that
+// underlying type, which is what the driver can encode as one array value.
+// A slice whose element type already matches its underlying kind, a []byte, a
+// driver.Valuer and anything that is not a slice are returned unchanged.
+func unnameSlice(v any) any {
+	if _, ok := v.(driver.Valuer); ok {
+		return v
+	}
+
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || rv.Kind() != reflect.Slice {
+		return v
+	}
+
+	elem := rv.Type().Elem()
+	if elem.Kind() == reflect.Uint8 {
+		// A []byte is one value, not a list.
+		return v
+	}
+
+	base := basicType(elem.Kind())
+	if base == nil {
+		return v
+	}
+
+	// A named element type, as in `type Status string; []Status`, and a named
+	// slice type are both rewritten to the plain form the driver encodes. Any
+	// other slice is already the shape the driver expects.
+	if elem == base && rv.Type().Name() == "" {
+		return v
+	}
+
+	out := reflect.MakeSlice(reflect.SliceOf(base), rv.Len(), rv.Len())
+	for i := range rv.Len() {
+		out.Index(i).Set(rv.Index(i).Convert(base))
+	}
+
+	return out.Interface()
 }
 
 // expandable returns the elements of a slice that stands for a list of values.
