@@ -50,7 +50,8 @@ func TestUpdateCaseIntoEnumColumn(t *testing.T) {
 		f := ant.Fields[Campaign]()
 
 		sendAt := int64(0)
-		require.NoError(t, db.Campaigns.Insert(ctx, &Campaign{Status: "scheduled", SendAt: &sendAt}))
+		sent := &Campaign{Status: "scheduled", SendAt: &sendAt}
+		require.NoError(t, db.Campaigns.Insert(ctx, sent))
 		require.NoError(t, db.Campaigns.Insert(ctx, &Campaign{Status: "scheduled"}))
 
 		t.Run("the enum column takes the CASE", func(t *testing.T) {
@@ -61,7 +62,12 @@ func TestUpdateCaseIntoEnumColumn(t *testing.T) {
 			n, err := db.Campaigns.
 				Where(ant.Eq(&f.ID, int64(1))).
 				Update(ctx, ant.SetExpr(&f.Status, next))
-			require.NoError(t, err, "a CASE assigned to an enum column must bind without a manual cast")
+			require.NoError(
+				t,
+				err,
+				"a CASE assigned to an enum column must bind without a manual cast",
+			)
+
 			require.EqualValues(t, 1, n)
 
 			got, err := db.Campaigns.NoTracking().Where(ant.Eq(&f.ID, int64(1))).First(ctx)

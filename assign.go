@@ -120,6 +120,7 @@ func castCaseIntoEnum(node qb.Expr, enum *meta.Enum) qb.Expr {
 
 	if len(c.Whens) > 0 {
 		out.Whens = make([]qb.When, len(c.Whens))
+
 		for i, w := range c.Whens {
 			out.Whens[i] = qb.When{If: w.If, Then: cast(w.Then)}
 		}
