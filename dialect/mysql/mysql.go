@@ -44,6 +44,7 @@ func shared(missing ...dialect.Feature) dialect.Syntax {
 			dialect.ConflictWhere,
 			dialect.ReturningUpdate,
 			dialect.DatePart,
+			dialect.ReadOnlyInTx,
 		),
 		Unlimited:     "18446744073709551615",
 		RetryEndsTx:   true,

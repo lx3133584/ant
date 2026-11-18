@@ -665,6 +665,35 @@ func TestConformanceSavepoints(t *testing.T) {
 	})
 }
 
+// ReadOnly on a nested Tx holds on a database that can change it inside a
+// transaction, and is refused on one that cannot, rather than dropped.
+func TestConformanceNestedReadOnly(t *testing.T) {
+	testdb.ForEach(t, func(t *testing.T, target testdb.Target) {
+		app := openApp(t, target)
+		ctx := t.Context()
+		err := app.Tx(ctx, func(tx *AppDB) error {
+			return tx.Tx(
+				ctx,
+				func(nested *AppDB) error {
+					return nested.Users.Insert(ctx, &User{Name: "nested", Email: "nested@x"})
+				},
+				ant.ReadOnly(),
+			)
+		})
+
+		if has(target, dialect.ReadOnlyInTx) {
+			require.ErrorContains(t, err, "read-only")
+		} else {
+			require.ErrorIs(t, err, ant.ErrUnsupported)
+			require.ErrorContains(t, err, target.Dialect.Name())
+		}
+
+		found, err := app.Users.Count(ctx)
+		require.NoError(t, err)
+		require.Zero(t, found, "nothing was written")
+	})
+}
+
 func TestConformanceErrors(t *testing.T) {
 	testdb.ForEach(t, func(t *testing.T, target testdb.Target) {
 		app := openAndSeed(t, target)

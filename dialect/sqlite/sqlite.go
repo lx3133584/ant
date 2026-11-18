@@ -23,6 +23,7 @@ var syntax = dialect.Syntax{
 		dialect.DefaultKeyword,
 		dialect.DateCast,
 		dialect.DatePart,
+		dialect.ReadOnlyInTx,
 	},
 	Unlimited:     "-1",
 	NoILike:       true,

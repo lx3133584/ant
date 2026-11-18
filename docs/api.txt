@@ -634,6 +634,7 @@ dialect: const FullJoin
 dialect: const LateralJoin
 dialect: const Merge
 dialect: const OnConflict
+dialect: const ReadOnlyInTx
 dialect: const ReturningDelete
 dialect: const ReturningInsert
 dialect: const ReturningUpdate

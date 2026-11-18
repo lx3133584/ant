@@ -25,6 +25,9 @@ const (
 	DateCast        Feature = "CAST to date with CURRENT_DATE"
 	DatePart        Feature = "DATE_PART"
 	SubqueryWith    Feature = "WITH inside a subquery"
+	// ReadOnlyInTx is making a transaction read-only once it has begun, as a
+	// Tx nested in another does.
+	ReadOnlyInTx Feature = "READ ONLY inside a transaction"
 )
 
 // Syntax says where a dialect's SQL differs from what Render writes, which is

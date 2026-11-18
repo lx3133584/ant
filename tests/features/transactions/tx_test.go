@@ -316,6 +316,26 @@ func TestNestedTxOptions(t *testing.T) {
 			require.ErrorContains(t, err, "read-only")
 		})
 
+		t.Run("the outer Tx writes again once the nested ReadOnly ends", func(t *testing.T) {
+			err := db.Tx(ctx, func(outer *AppDB) error {
+				err := outer.Tx(
+					ctx,
+					func(inner *AppDB) error {
+						_, err := inner.Users.Count(ctx)
+
+						return err
+					},
+					ant.ReadOnly(),
+				)
+				if err != nil {
+					return err
+				}
+
+				return outer.Users.InsertOnly(ctx, user("after nested read only"))
+			})
+			require.NoError(t, err)
+		})
+
 		t.Run("Isolation on a nested Tx is refused rather than ignored", func(t *testing.T) {
 			err := db.Tx(ctx, func(outer *AppDB) error {
 				return outer.Tx(
