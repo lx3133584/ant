@@ -98,7 +98,7 @@ import _ "modernc.org/sqlite"                 // SQLite
 import _ "github.com/microsoft/go-mssqldb"    // SQL Server
 ```
 
-Use `parseTime=true` in a MySQL DSN, or times come back as bytes. Use `_pragma=foreign_keys(1)` in a SQLite DSN, or foreign keys are not enforced, and see above for writers at once.
+Use `parseTime=true` in a MySQL or MariaDB DSN: without it times come back as bytes, so `ant.Open` refuses the DSN. A pool passed to `ant.Wrap` is not checked. Use `_pragma=foreign_keys(1)` in a SQLite DSN, or foreign keys are not enforced, and see above for writers at once.
 
 `go-mssqldb`, as of v1.11.2, rolls a transaction back with the context it began with, and if that context has ended, it leaves a goroutine reading the connection after the connection went back to the pool, where the next statement races it. ant begins its own transactions, from `Tx`, `Begin`, `SaveChanges`, and `DryRun`, on a context that does not end, on a connection taken with yours, and rolls them back itself when yours ends, so they never meet this. A transaction you begin yourself and pass to `UseTx` can: on SQL Server, end it before its context does.
 

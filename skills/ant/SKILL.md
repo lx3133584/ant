@@ -79,7 +79,8 @@ adults, err := db.Users.
   `_ "github.com/microsoft/go-mssqldb"`.
 - Dialects: `postgres.Dialect`, `mysql.Dialect`, `mysql.MariaDB`, `sqlite.Dialect`,
   `sqlserver.Dialect`, from `github.com/skudra-go/ant/dialect/<name>`.
-- DSN settings that matter: MySQL and MariaDB need `parseTime=true`. SQLite wants
+- DSN settings that matter: MySQL and MariaDB need `parseTime=true`,
+  and `ant.Open` refuses a DSN without it. SQLite wants
   `_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate`.
 
 ## Columns are field pointers
