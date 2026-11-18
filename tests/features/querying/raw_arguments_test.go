@@ -110,12 +110,14 @@ func TestRawArguments(t *testing.T) {
 		})
 
 		t.Run("a slice of a named type bound to an enum array", func(t *testing.T) {
-			_, err := ant.Raw[any](db, `CREATE TYPE campaign_status AS ENUM ('draft', 'live')`).Exec(ctx)
-			require.NoError(t, err)
-			_, err = ant.Raw[any](db, `CREATE TEMP TABLE campaigns (status campaign_status NOT NULL)`).Exec(ctx)
-			require.NoError(t, err)
-			_, err = ant.Raw[any](db, `INSERT INTO campaigns (status) VALUES ('draft')`).Exec(ctx)
-			require.NoError(t, err)
+			for _, ddl := range []string{
+				`CREATE TYPE campaign_status AS ENUM ('draft', 'live')`,
+				`CREATE TEMP TABLE campaigns (status campaign_status NOT NULL)`,
+				`INSERT INTO campaigns (status) VALUES ('draft')`,
+			} {
+				_, err := ant.Raw[any](db, ddl).Exec(ctx)
+				require.NoError(t, err)
+			}
 
 			for _, arg := range []any{
 				namedStatuses{CampaignStatus("draft")},

@@ -658,6 +658,7 @@ func unnameSlice(v any) any {
 	}
 
 	out := reflect.MakeSlice(reflect.SliceOf(base), rv.Len(), rv.Len())
+
 	for i := range rv.Len() {
 		out.Index(i).Set(rv.Index(i).Convert(base))
 	}
