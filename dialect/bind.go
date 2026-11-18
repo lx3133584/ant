@@ -38,7 +38,7 @@ func Bind(d Dialect, query string, args []any) (string, []any, error) {
 	out := make([]any, len(bound))
 
 	for i, a := range bound {
-		out[i] = addressed(a)
+		out[i] = addressed(unnameSlice(a))
 
 		if SyntaxOf(d).UTCTimes {
 			out[i] = utc(out[i])
@@ -553,7 +553,7 @@ type binder struct {
 // value writes the placeholders for v, given the query text after it, and
 // returns what it wrote.
 func (b *binder) value(v any, rest string) string {
-	values := []any{unnameSlice(v)}
+	values := []any{v}
 
 	if list, ok := expandable(v); ok && insideIn(b.out.String(), rest) {
 		values = list
@@ -616,8 +616,14 @@ func basicType(k reflect.Kind) reflect.Type {
 // unnameSlice converts a slice of a named basic type to a slice of that
 // underlying type, which is what the driver can encode as one array value.
 // A slice whose element type already matches its underlying kind, a []byte, a
-// driver.Valuer and anything that is not a slice are returned unchanged.
+// driver.Valuer, a slice of elements that convert themselves, and anything that
+// is not a slice are returned unchanged. A secret's value is converted the same
+// way, and stays a secret.
 func unnameSlice(v any) any {
+	if secret, ok := v.(qb.Secret); ok {
+		return qb.Secret{V: unnameSlice(secret.V)}
+	}
+
 	if _, ok := v.(driver.Valuer); ok {
 		return v
 	}
@@ -635,6 +641,12 @@ func unnameSlice(v any) any {
 
 	base := basicType(elem.Kind())
 	if base == nil {
+		return v
+	}
+
+	// An element that converts itself may store something other than its
+	// underlying value, so it is left for the driver to convert.
+	if elem.Implements(valuerType) || reflect.PointerTo(elem).Implements(valuerType) {
 		return v
 	}
 

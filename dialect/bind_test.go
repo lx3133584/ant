@@ -186,3 +186,61 @@ func TestPointerValuersAreBoundByPointer(t *testing.T) {
 
 	check(t, args)
 }
+
+// status is a named element type, as an enum is.
+type status string
+
+// statuses is a named slice of it.
+type statuses []status
+
+// coded converts itself to something other than its underlying value.
+type coded int
+
+func (c coded) Value() (driver.Value, error) { return "code-" + string(rune('0'+c)), nil }
+
+// A slice of a named basic type binds as a slice of the plain type, which the
+// driver can encode as one array, on every path that binds an argument. A
+// slice whose elements convert themselves is left to them.
+func TestNamedSlicesBindAsPlainSlices(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want any
+	}{
+		{"named element", []status{"draft"}, []string{"draft"}},
+		{"named slice", statuses{"draft"}, []string{"draft"}},
+		{"named slice of a plain element", namedInts{1, 2}, []int{1, 2}},
+		{"plain slice", []string{"a"}, []string{"a"}},
+		{"elements that convert themselves", []coded{1}, []coded{1}},
+		{"bytes", []byte("x"), []byte("x")},
+		{"secret", qb.Secret{V: []status{"draft"}}, qb.Secret{V: []string{"draft"}}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, query := range []string{"SELECT ?", "SELECT $1"} {
+				_, args, err := dialect.Bind(postgres.Dialect, query, []any{c.in})
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if !reflect.DeepEqual(args, []any{c.want}) {
+					t.Errorf("Bind(%q) = %#v, want %#v", query, args[0], c.want)
+				}
+			}
+
+			_, args, err := postgres.Dialect.Render(&qb.Select{
+				Columns: []qb.Selected{{Value: qb.Param{Value: c.in}}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !reflect.DeepEqual(args, []any{c.want}) {
+				t.Errorf("Render = %#v, want %#v", args[0], c.want)
+			}
+		})
+	}
+}
+
+type namedInts []int

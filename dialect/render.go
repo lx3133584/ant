@@ -188,7 +188,7 @@ func boundValue(s *Syntax, v any) any {
 		return v
 	}
 
-	v = addressed(v)
+	v = addressed(unnameSlice(v))
 
 	if s.UTCTimes {
 		v = utc(v)

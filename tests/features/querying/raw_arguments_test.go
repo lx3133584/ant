@@ -117,13 +117,25 @@ func TestRawArguments(t *testing.T) {
 			_, err = ant.Raw[any](db, `INSERT INTO campaigns (status) VALUES ('draft')`).Exec(ctx)
 			require.NoError(t, err)
 
-			got, err := ant.Raw[int64](
-				db,
-				`SELECT count(*) FROM campaigns WHERE status = ANY(?)`,
+			for _, arg := range []any{
 				namedStatuses{CampaignStatus("draft")},
-			).First(ctx)
-			require.NoError(t, err)
-			require.Equal(t, int64(1), *got)
+				[]CampaignStatus{"draft"},
+			} {
+				for _, query := range []string{
+					`SELECT count(*) FROM campaigns WHERE status = ANY(?)`,
+					`SELECT count(*) FROM campaigns WHERE status = ANY($1)`,
+				} {
+					got, err := ant.Raw[int64](db, query, arg).First(ctx)
+					require.NoError(t, err, "%s with %T", query, arg)
+					require.Equal(t, int64(1), *got)
+				}
+			}
+
+			found, err := db.Users.Where(
+				ant.SQLCond(`name = ANY(?)`, namedNames),
+			).Count(ctx)
+			require.NoError(t, err, "a condition binds it as one array too")
+			require.Equal(t, int64(2), found)
 		})
 
 		t.Run("the jsonb ? operator still works", func(t *testing.T) {
