@@ -121,12 +121,20 @@ func (q *Query[T]) collectJoined(rows *sql.Rows) (out []*T, err error) {
 			return nil, err
 		}
 
+		for _, f := range root {
+			f.InUTC(unsafe.Pointer(entity))
+		}
+
 		for i, j := range q.inJoin {
 			if !seen[i] {
 				continue
 			}
 
 			value := values[i]
+
+			for _, f := range j.source.model.Stored() {
+				f.InUTC(value)
+			}
 
 			if tracked {
 				value = q.state.tracker.Load(j.source.model, value)

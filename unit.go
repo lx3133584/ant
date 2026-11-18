@@ -1360,6 +1360,10 @@ func (u *unit) create(ctx context.Context, to exec.Executor, n *node) error {
 		return err
 	}
 
+	for _, f := range returning {
+		f.InUTC(n.entity)
+	}
+
 	n.generated = returning
 
 	return rows.Close()
@@ -1440,6 +1444,10 @@ func (u *unit) createThenRead(
 
 	if err := rows.Scan(dest...); err != nil {
 		return err
+	}
+
+	for _, f := range returning {
+		f.InUTC(n.entity)
 	}
 
 	return rows.Close()

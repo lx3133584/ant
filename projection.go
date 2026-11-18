@@ -174,6 +174,12 @@ func (r *rowReader) read() ([]unsafe.Pointer, error) {
 	for i, s := range r.sources {
 		if s.nullable && !r.seen[i] {
 			r.values[i] = nil
+
+			continue
+		}
+
+		for _, f := range r.fields[i] {
+			f.InUTC(r.values[i])
 		}
 	}
 

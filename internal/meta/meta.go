@@ -72,6 +72,8 @@ type Field struct {
 	Comparer atomic.Pointer[func(a, b unsafe.Pointer) bool]
 
 	pointer func(unsafe.Pointer) any
+	// utc moves a scanned value of the field to UTC, nil if it holds no time.
+	utc func(unsafe.Pointer)
 	// index is the field's position in its model's Fields.
 	index int
 	// key reads the field as Key returns it, for the types that need no
@@ -1428,6 +1430,7 @@ func walk(m *Model, t reflect.Type, offset uintptr, prefix, columnPrefix string)
 			key:       keyReader(sf.Type),
 			intKey:    intKeyReader(sf.Type),
 			copy:      copiers[sf.Type],
+			utc:       utcMovers[sf.Type],
 		})
 	}
 
