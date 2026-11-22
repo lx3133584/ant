@@ -122,13 +122,18 @@ func (n *node) hook(ctx context.Context, run func(any) error) error {
 	return nil
 }
 
-// checkRules runs the model's field rules.
+// checkRules runs the model's field rules. An insert leaves a zero default
+// field to the database, so the value the database will store is not checked in Go.
 func (n *node) checkRules(ctx context.Context) error {
 	if ctx.Value(skipHooks{}) != nil {
 		return nil
 	}
 
 	for _, rule := range n.model.Rules {
+		if n.insert && rule.Field.Default && rule.Field.Value(n.entity).IsZero() {
+			continue
+		}
+
 		if err := rule.Check(n.entity); err != nil {
 			return &ValidationError{Model: n.model.Type.Name(), Field: rule.Field.Short, Err: err}
 		}

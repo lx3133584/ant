@@ -158,3 +158,90 @@ func TestFieldRulesOnUpsert(t *testing.T) {
 		require.Zero(t, n)
 	})
 }
+
+// DefaultStatus is filled by the database when it is left zero.
+type DefaultStatus string
+
+const (
+	DefaultDraft     DefaultStatus = "draft"
+	DefaultPublished DefaultStatus = "published"
+)
+
+// DefaultedDoc validates Status and leaves its zero value to the database.
+type DefaultedDoc struct {
+	ID     int64
+	Title  string
+	Status DefaultStatus `ant:"default='draft'"`
+}
+
+func (DefaultedDoc) Configure(b *ant.ModelBuilder[DefaultedDoc]) {
+	b.Validate(&DefaultedDocs.Status, validate.All(
+		validate.Required[DefaultStatus](),
+		validate.OneOf(DefaultDraft, DefaultPublished),
+	))
+}
+
+var DefaultedDocs = ant.Fields[DefaultedDoc]()
+
+// DefaultedDB holds the default-validated model.
+type DefaultedDB struct {
+	ant.Context
+	DefaultedDocs ant.Table[DefaultedDoc]
+}
+
+const defaultedDDL = `
+	CREATE TABLE defaulted_docs (
+		id BIGSERIAL PRIMARY KEY,
+		title TEXT NOT NULL UNIQUE,
+		status TEXT NOT NULL DEFAULT 'draft'
+	)`
+
+func TestDefaultFieldRules(t *testing.T) {
+	fixture.RunTrackedWith(t, defaultedDDL, func(t *testing.T, db *DefaultedDB) {
+		ctx := t.Context()
+		doc := &DefaultedDoc{Title: "zero"}
+		require.NoError(t, db.DefaultedDocs.Insert(ctx, doc))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		stored, err := db.DefaultedDocs.Find(ctx, doc.ID)
+		require.NoError(t, err)
+		require.Equal(t, DefaultDraft, stored.Status)
+
+		stored.Status = ""
+		err = db.SaveChanges(ctx)
+
+		var invalid *ant.ValidationError
+		require.ErrorAs(t, err, &invalid)
+
+		require.Equal(
+			t,
+			"Status",
+			invalid.Field,
+			"an update writes the zero instead of taking the default",
+		)
+
+		stored.Status = DefaultPublished
+
+		require.NoError(t, db.SaveChanges(ctx))
+
+		err = db.DefaultedDocs.Insert(ctx, &DefaultedDoc{Title: "bad", Status: "invalid"})
+		require.ErrorContains(t, err, "Status", "a nonzero value still has to satisfy the rule")
+
+		require.NoError(t, db.DefaultedDocs.Insert(ctx,
+			&DefaultedDoc{Title: "batch-one"},
+			&DefaultedDoc{Title: "batch-two"}))
+
+		count, err := db.DefaultedDocs.NoTracking().
+			Where(ant.Eq(&DefaultedDocs.Status, DefaultDraft)).
+			Count(ctx)
+		require.NoError(t, err)
+		require.EqualValues(t, 2, count)
+
+		_, err = db.DefaultedDocs.Upsert(
+			ctx,
+			&DefaultedDoc{Title: "zero"},
+			ant.OnConflict(&DefaultedDocs.Title).DoUpdate(ant.F(&DefaultedDocs.Status)),
+		)
+		require.ErrorContains(t, err, "Status", "an upsert's update branch can write the zero")
+	})
+}
