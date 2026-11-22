@@ -2,11 +2,11 @@
 id: 118
 title: "A SQLite DSN says whether foreign keys are on"
 area: dialects
-status: active
+status: amended
 tags: [sqlite, foreign-keys, dsn, CheckDSN]
 issues: [214]
 related: [74]
-changed_by: []
+changed_by: [159]
 code: [dialect/sqlite/sqlite.go]
 tests: [dialect/sqlite/sqlite_test.go]
 ---
@@ -14,6 +14,8 @@ tests: [dialect/sqlite/sqlite_test.go]
 # 118. A SQLite DSN says whether foreign keys are on
 
 **In short:** Open refuses a SQLite DSN that does not set foreign_keys, in any of the driver's forms; foreign_keys(0) keeps them off on purpose.
+
+> **Amended.** Decision 159 also requires an explicit `busy_timeout` and `_txlock`, with `busy_timeout(0)` and `_txlock=deferred` as opt-outs.
 
 ## Decision
 

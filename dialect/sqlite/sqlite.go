@@ -44,11 +44,9 @@ var syntax = dialect.Syntax{
 func (impl) Name() string       { return "sqlite" }
 func (impl) DriverName() string { return "sqlite" }
 
-// CheckDSN refuses a data source name that does not say whether foreign keys are
-// on. SQLite turns them off on every new connection unless told, so REFERENCES
-// constraints accept a row whose foreign key points at nothing, and no error
-// says so. The driver takes _pragma=foreign_keys(1), or _foreign_keys or _fk; a
-// value that turns them off is a choice, and is accepted.
+// CheckDSN refuses a data source name that leaves foreign keys, busy_timeout,
+// or the transaction lock mode implicit. Each setting has an explicit opt-out:
+// foreign_keys(0), busy_timeout(0), and _txlock=deferred respectively.
 func (impl) CheckDSN(dsn string) error {
 	_, query, _ := strings.Cut(dsn, "?")
 
@@ -57,24 +55,60 @@ func (impl) CheckDSN(dsn string) error {
 		return fmt.Errorf("ant: sqlite: %w", err)
 	}
 
-	if values.Has("_foreign_keys") || values.Has("_fk") {
-		return nil
-	}
+	hasPragma := func(want string, withValue bool) bool {
+		for _, pragma := range values["_pragma"] {
+			name, value, parenthesized := strings.Cut(pragma, "(")
+			if !parenthesized {
+				name, value, _ = strings.Cut(pragma, "=")
+			}
 
-	for _, pragma := range values["_pragma"] {
-		name, _, _ := strings.Cut(pragma, "(")
-		name, _, _ = strings.Cut(name, "=")
+			if !strings.EqualFold(strings.TrimSpace(name), want) {
+				continue
+			}
 
-		if strings.EqualFold(strings.TrimSpace(name), "foreign_keys") {
-			return nil
+			if !withValue || strings.TrimSpace(strings.TrimSuffix(value, ")")) != "" {
+				return true
+			}
 		}
+
+		return false
 	}
 
-	return errors.New(
-		"ant: sqlite: the data source name needs _pragma=foreign_keys(1); " +
-			"without it SQLite enforces no foreign key, and accepts a row that points at nothing. " +
-			"Use _pragma=foreign_keys(0) to keep them off on purpose",
-	)
+	if !values.Has("_foreign_keys") && !values.Has("_fk") && !hasPragma("foreign_keys", false) {
+		return errors.New(
+			"ant: sqlite: the data source name needs _pragma=foreign_keys(1); " +
+				"without it SQLite enforces no foreign key, and accepts a row that points at nothing. " +
+				"Use _pragma=foreign_keys(0) to keep them off on purpose",
+		)
+	}
+
+	var missing []string
+
+	busyTimeout := values.Get("_busy_timeout")
+
+	if values.Has("_timeout") {
+		// The driver gives the alias precedence, including an empty value that
+		// suppresses the primary key.
+		busyTimeout = values.Get("_timeout")
+	}
+
+	if !hasPragma("busy_timeout", true) && busyTimeout == "" {
+		missing = append(missing, "_pragma=busy_timeout(5000)")
+	}
+
+	if values.Get("_txlock") == "" {
+		missing = append(missing, "_txlock=immediate")
+	}
+
+	if len(missing) > 0 {
+		return errors.New(
+			"ant: sqlite: the data source name needs " + strings.Join(missing, " and ") + "; " +
+				"without them concurrent writes can fail with SQLITE_BUSY. " +
+				"Use _pragma=busy_timeout(0) or _txlock=deferred to keep a default on purpose",
+		)
+	}
+
+	return nil
 }
 
 func (impl) Placeholder(n int) string { return "?" }

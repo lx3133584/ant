@@ -40,15 +40,15 @@ func TestCheckDSNRequiresForeignKeys(t *testing.T) {
 	}
 
 	for _, dsn := range []string{
-		"file:app.db?_pragma=foreign_keys(1)",
-		":memory:?_pragma=foreign_keys(1)",
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate",
+		":memory:?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate",
 		"file:app.db?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_txlock=immediate",
-		"file:app.db?_pragma=FOREIGN_KEYS(ON)",
-		"file:app.db?_pragma=foreign_keys%3D1",
-		"file:app.db?_pragma=%20foreign_keys%20(1)",
-		"file:app.db?_pragma=foreign_keys(0)",
-		"file:app.db?_foreign_keys=on",
-		"file:app.db?_fk=1",
+		"file:app.db?_pragma=FOREIGN_KEYS(ON)&_pragma=busy_timeout(5000)&_txlock=immediate",
+		"file:app.db?_pragma=foreign_keys%3D1&_pragma=busy_timeout(5000)&_txlock=immediate",
+		"file:app.db?_pragma=%20foreign_keys%20(1)&_pragma=busy_timeout(5000)&_txlock=immediate",
+		"file:app.db?_pragma=foreign_keys(0)&_pragma=busy_timeout(5000)&_txlock=immediate",
+		"file:app.db?_foreign_keys=on&_pragma=busy_timeout(5000)&_txlock=immediate",
+		"file:app.db?_fk=1&_pragma=busy_timeout(5000)&_txlock=immediate",
 	} {
 		if err := d.CheckDSN(dsn); err != nil {
 			t.Fatalf("%q must be accepted: %v", dsn, err)
@@ -77,7 +77,7 @@ func TestOpenRefusesADSNWithoutForeignKeys(t *testing.T) {
 	db, err := ant.Open[appDB](
 		context.Background(),
 		Dialect,
-		"file:"+path+"?_pragma=foreign_keys(1)",
+		"file:"+path+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate",
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -94,5 +94,100 @@ func TestOpenRefusesADSNWithoutForeignKeys(t *testing.T) {
 
 	if on != 1 {
 		t.Fatalf("foreign_keys is %d, want 1", on)
+	}
+}
+
+func TestCheckDSNRequiresLockSettings(t *testing.T) {
+	d := Dialect.(dialect.DSNChecker)
+
+	for _, dsn := range []string{
+		"file:app.db?_pragma=foreign_keys(1)",
+		"file:app.db?_pragma=foreign_keys(1)&_txlock=immediate",
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)",
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout&_txlock=immediate",
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=",
+		"file:app.db?_pragma=foreign_keys(1)&_busy_timeout=5000&_timeout=&_txlock=immediate",
+	} {
+		if err := d.CheckDSN(dsn); err == nil {
+			t.Fatalf("%q must be refused: the lock settings are incomplete", dsn)
+		}
+	}
+
+	for _, dsn := range []string{
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate",
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=BUSY_TIMEOUT(5000)&_txlock=immediate",
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout=5000&_txlock=exclusive",
+		"file:app.db?_pragma=foreign_keys(0)&_pragma=busy_timeout(0)&_txlock=deferred",
+		"file:app.db?_pragma=foreign_keys(1)&_busy_timeout=5000&_txlock=immediate",
+		"file:app.db?_pragma=foreign_keys(1)&_timeout=0&_txlock=deferred",
+		"file:app.db?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_timeout=&_txlock=immediate",
+	} {
+		if err := d.CheckDSN(dsn); err != nil {
+			t.Fatalf("%q must be accepted: %v", dsn, err)
+		}
+	}
+}
+
+func TestOpenRequiresLockSettings(t *testing.T) {
+	type appDB struct {
+		ant.Context
+	}
+
+	path := filepath.Join(t.TempDir(), "app.db")
+
+	for _, dsn := range []string{
+		"file:" + path + "?_pragma=foreign_keys(1)",
+		"file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout&_txlock=immediate",
+		"file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=",
+		"file:" + path + "?_pragma=foreign_keys(1)&_busy_timeout=5000&_timeout=&_txlock=immediate",
+	} {
+		db, err := ant.Open[appDB](context.Background(), Dialect, dsn)
+		if err == nil {
+			_ = db.Close()
+
+			t.Errorf("%q must be refused: the lock settings are incomplete", dsn)
+		}
+	}
+
+	for _, test := range []struct {
+		dsn         string
+		busyTimeout int
+	}{
+		{
+			dsn:         "file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate",
+			busyTimeout: 5000,
+		},
+		{
+			dsn:         "file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(0)&_txlock=deferred",
+			busyTimeout: 0,
+		},
+		{
+			dsn:         "file:" + path + "?_pragma=foreign_keys(1)&_busy_timeout=4000&_txlock=immediate",
+			busyTimeout: 4000,
+		},
+		{
+			dsn:         "file:" + path + "?_pragma=foreign_keys(1)&_timeout=3000&_txlock=deferred",
+			busyTimeout: 3000,
+		},
+	} {
+		db, err := ant.Open[appDB](context.Background(), Dialect, test.dsn)
+		if err != nil {
+			t.Errorf("%q must open: %v", test.dsn, err)
+
+			continue
+		}
+
+		var busyTimeout int
+		if err := db.DB().
+			QueryRowContext(context.Background(), "PRAGMA busy_timeout").
+			Scan(&busyTimeout); err != nil {
+			t.Errorf("%q: read busy_timeout: %v", test.dsn, err)
+		} else if busyTimeout != test.busyTimeout {
+			t.Errorf("%q: busy_timeout is %d, want %d", test.dsn, busyTimeout, test.busyTimeout)
+		}
+
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
 	}
 }
