@@ -40,6 +40,9 @@ type node struct {
 	// relation, written even if they hold the parent's key already, so a row
 	// that is gone, as one this context deleted, fails rather than vanishing.
 	linked []*meta.Field
+	// scoped holds target-side Eq values assigned to an existing untracked row,
+	// whose other fields must not be overwritten by the relation.
+	scoped []*meta.Field
 	walked bool // its relations were followed, as InsertOnly's are not
 	// dropped says the unit let go of the node, as when its entry moved to
 	// another address, so it is no longer the node of its entity.
@@ -742,8 +745,10 @@ func (u *unit) follow(n *node, r *meta.Relation, link meta.Link, entity unsafe.P
 		other.insert = true
 	}
 
+	unmoved := u.unmoved(n, r, link, entity)
+
 	switch {
-	case u.unmoved(n, r, link, entity) && !keyless(n, r, link, entity):
+	case unmoved && !keyless(n, r, link, entity):
 	case r.Kind == meta.Many && r.Pivot == nil && !link.BelongsTo && other.entry == nil &&
 		!other.insert && u.tracksRelation(n, r):
 		other.links = append(other.links, fkLink{n, link.Foreign, link.Local})
@@ -764,6 +769,10 @@ func (u *unit) follow(n *node, r *meta.Relation, link meta.Link, entity unsafe.P
 		u.morph(other, r)
 	}
 
+	if !unmoved && r.Pivot == nil {
+		u.scope(other, r)
+	}
+
 	if seen {
 		return nil
 	}
@@ -776,6 +785,59 @@ func (u *unit) follow(n *node, r *meta.Relation, link meta.Link, entity unsafe.P
 func (u *unit) morph(n *node, r *meta.Relation) {
 	if !u.dry {
 		n.setMorph(r)
+	}
+}
+
+// scope applies target-side Eq conditions when a relation gains a row. Other
+// conditions remain read filters, and an unmoved relation leaves edits alone.
+func (u *unit) scope(n *node, r *meta.Relation) {
+	if u.dry {
+		return
+	}
+
+	for _, cond := range r.Scope {
+		compare, ok := cond.(qb.Compare)
+		if !ok || compare.Op != qb.OpEq || ownerSide(r, cond) {
+			continue
+		}
+
+		column, ok := compare.Left.(qb.Column)
+		if !ok || column.Table != n.model.Table {
+			continue
+		}
+
+		f := n.model.Column(column.Name)
+
+		param, ok := qb.ParamOf(compare.Right)
+		if f == nil || !ok || !slices.Contains(n.model.Writable(), f) ||
+			!n.insert && !slices.Contains(n.model.Updatable(), f) {
+			continue
+		}
+
+		value := param.Value
+		if secret, ok := value.(qb.Secret); ok {
+			value = secret.V
+		}
+
+		current := f.Value(n.entity)
+		equal := reflect.DeepEqual(current.Interface(), value)
+
+		v := reflect.ValueOf(value)
+		if v.Kind() == reflect.Pointer && !v.IsNil() {
+			cloned := reflect.New(v.Type().Elem())
+			cloned.Elem().Set(v.Elem())
+			v = cloned
+		}
+
+		current.Set(v)
+
+		if equal {
+			continue
+		}
+
+		if n.entry == nil && !n.insert && !slices.Contains(n.scoped, f) {
+			n.scoped = append(n.scoped, f)
+		}
 	}
 }
 
@@ -1066,14 +1128,20 @@ func (n *node) assignForeignKeys() ([]*meta.Field, error) {
 	return changed, nil
 }
 
-// pending returns the fields to UPDATE. An untracked node writes only the foreign
-// keys that were just assigned.
+// pending returns the fields to UPDATE. An untracked node writes only the
+// foreign keys and scope values that a relation just assigned.
 func (n *node) pending(assigned []*meta.Field) []*meta.Field {
 	switch {
 	case n.changed != nil:
 		return n.changed
 	case n.entry == nil:
 		for _, f := range n.linked {
+			if !slices.Contains(assigned, f) {
+				assigned = append(assigned, f)
+			}
+		}
+
+		for _, f := range n.scoped {
 			if !slices.Contains(assigned, f) {
 				assigned = append(assigned, f)
 			}
@@ -1098,7 +1166,8 @@ func (u *unit) writes() int {
 	count := len(u.pivots)
 
 	for _, n := range u.order {
-		if n.insert || n.remove || n.forced || len(n.links) > 0 || n.changed != nil ||
+		if n.insert || n.remove || n.forced || len(n.links) > 0 || len(n.scoped) > 0 ||
+			n.changed != nil ||
 			n.entry != nil && n.entity == n.entry.Entity && n.entry.Dirty() {
 			count++
 
@@ -1128,7 +1197,7 @@ func (u *unit) writesAnything() bool {
 			return true
 		}
 
-		if len(n.linked) > 0 {
+		if len(n.linked) > 0 || len(n.scoped) > 0 {
 			return true
 		}
 
