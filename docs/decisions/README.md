@@ -169,6 +169,7 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [120](120-the-root-does-not-track-and-a-session-does.md) | The root does not track, and a session does | active | `WithTracking` `Session` `ErrNoTracking` `root-context` `unit-of-work` |
 | [140](140-an-update-that-changed-nothing-is-checked-against-the-row.md) | On MySQL, an update that changed nothing is checked against the row | active | `SaveChanges` `ConcurrencyError` `MySQL` `MariaDB` `RowsAffected` `clientFoundRows` `ChangedRowsOnly` `token` `version` `Update` `UpdateMany` |
 | [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) | Chunk lets go of a group that has nothing to save | active | `Chunk` `ChunkByKey` `tracking` `memory` `Session` `SaveChanges` `ForgetAlone` |
+| [145](145-with-adds-a-computed-value-without-untracking-a-row.md) | With adds a computed value without untracking a row | active | `With` `computed` `tracking` `identity-map` |
 
 #### Transactions
 
@@ -399,7 +400,7 @@ Before changing a file, read the decisions about it.
 | `projection.go` | [5](005-select-closures-run-client-side.md) [35](035-typed-expressions.md) [136](136-an-outer-joins-side-reads-what-only-the-driver-converts.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) |
 | `qb/aliased_test.go` | [14](014-the-dialect-interface-exposes-an-internal-type.md) [62](062-the-statement-ast-is-public.md) |
 | `qb/qb.go` | [14](014-the-dialect-interface-exposes-an-internal-type.md) [39](039-global-filters-are-lazy.md) [62](062-the-statement-ast-is-public.md) [68](068-sensitive-values-are-wrapped-when-bound.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md) [124](124-a-conflict-target-repeats-a-partial-indexs-predicate.md) |
-| `query.go` | [1](001-ant-ordered-replaces-cmp-ordered.md) [3](003-find-takes-a-generic-key.md) [6](006-return-shapes-and-tracking.md) [18](018-wrong-model-detection.md) [20](020-queries-are-immutable.md) [23](023-guarding-bulk-writes.md) [27](027-all-returns-t.md) [28](028-identity-and-relation-slices.md) [33](033-include-shape-functions.md) [36](036-derived-tables-keep-the-models-name.md) [37](037-references-to-outer-queries.md) [38](038-bulk-writes.md) [40](040-soft-deletes-are-a-filter.md) [80](080-every-write-moves-the-version-on.md) [81](081-a-set-operations-members-keep-their-own-paging.md) [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md) [112](112-a-locking-read-puts-the-row-into-the-tracked-instance.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) |
+| `query.go` | [1](001-ant-ordered-replaces-cmp-ordered.md) [3](003-find-takes-a-generic-key.md) [6](006-return-shapes-and-tracking.md) [18](018-wrong-model-detection.md) [20](020-queries-are-immutable.md) [23](023-guarding-bulk-writes.md) [27](027-all-returns-t.md) [28](028-identity-and-relation-slices.md) [33](033-include-shape-functions.md) [36](036-derived-tables-keep-the-models-name.md) [37](037-references-to-outer-queries.md) [38](038-bulk-writes.md) [40](040-soft-deletes-are-a-filter.md) [80](080-every-write-moves-the-version-on.md) [81](081-a-set-operations-members-keep-their-own-paging.md) [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md) [112](112-a-locking-read-puts-the-row-into-the-tracked-instance.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) [145](145-with-adds-a-computed-value-without-untracking-a-row.md) |
 | `raw.go` | [24](024-raw-sql-arguments.md) [27](027-all-returns-t.md) [87](087-an-embedded-field-must-be-a-struct-value.md) |
 | `run.go` | [48](048-replicas.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) |
 | `schema.go` | [21](021-configuration-runs-when-a-context-opens.md) [51](051-modeling-added-for-migrations.md) [54](054-foreign-keys.md) [66](066-several-models-can-share-a-table.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [117](117-the-migrate-program-takes-the-applications-options.md) [125](125-open-refuses-a-model-it-would-misread.md) [131](131-a-foreign-key-column-follows-its-target.md) [132](132-default-names-are-valid-and-distinct.md) [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) |
@@ -462,6 +463,7 @@ Before changing a file, read the decisions about it.
 | `tests/features/lifecycle/validate_test.go` | [47](047-hooks-run-inside-the-write.md) |
 | `tests/features/loading/include_test.go` | [33](033-include-shape-functions.md) |
 | `tests/features/loading/shaped_include_test.go` | [33](033-include-shape-functions.md) |
+| `tests/features/loading/with_tracking_test.go` | [145](145-with-adds-a-computed-value-without-untracking-a-row.md) |
 | `tests/features/migrations` | [117](117-the-migrate-program-takes-the-applications-options.md) |
 | `tests/features/migrations/adopt_test.go` | [57](057-drift-compares-what-the-server-stored.md) [59](059-adopting-an-existing-database.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md) [128](128-adopt-leaves-out-roles.md) |
 | `tests/features/migrations/diff_test.go` | [11](011-migration-model.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) |
@@ -583,7 +585,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `ChunkByKey`: [81](081-a-set-operations-members-keep-their-own-paging.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) [143](143-paging-arguments-out-of-range-are-errpaging.md)
 - `closure`: [5](005-select-closures-run-client-side.md) [9](009-owner-review-of-step-1.md)
 - `ColumnType`: [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md)
-- `computed`: [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md)
+- `computed`: [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md) [145](145-with-adds-a-computed-value-without-untracking-a-row.md)
 - `ConcurrencyError`: [80](080-every-write-moves-the-version-on.md) [110](110-a-version-the-application-sets-is-the-one-checked.md) [112](112-a-locking-read-puts-the-row-into-the-tracked-instance.md) [140](140-an-update-that-changed-nothing-is-checked-against-the-row.md)
 - `CONCURRENTLY`: [56](056-failure.md) [78](078-a-replaced-column-takes-its-dependents-along-and-they.md)
 - `Configure`: [21](021-configuration-runs-when-a-context-opens.md) [66](066-several-models-can-share-a-table.md) [83](083-antvet-judges-only-what-it-can-see.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md)
@@ -621,7 +623,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `history`: [8](008-step-1-file-count.md) [17](017-implemented-ahead-of-the-skeleton.md) [56](056-failure.md) [115](115-a-file-outside-a-transaction-is-recorded-before-it-runs.md)
 - `hooks`: [47](047-hooks-run-inside-the-write.md) [63](063-savechanges-batches-inserts.md) [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md)
 - `identity`: [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md)
-- `identity-map`: [27](027-all-returns-t.md) [28](028-identity-and-relation-slices.md) [39](039-global-filters-are-lazy.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md) [108](108-kept-sql-by-shape-unboxed-keys-compact-snapshots-and.md) [112](112-a-locking-read-puts-the-row-into-the-tracked-instance.md)
+- `identity-map`: [27](027-all-returns-t.md) [28](028-identity-and-relation-slices.md) [39](039-global-filters-are-lazy.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md) [108](108-kept-sql-by-shape-unboxed-keys-compact-snapshots-and.md) [112](112-a-locking-read-puts-the-row-into-the-tracked-instance.md) [145](145-with-adds-a-computed-value-without-untracking-a-row.md)
 - `immutable`: [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md)
 - `In`: [24](024-raw-sql-arguments.md) [95](095-in-means-eq-and-other-value-rules.md)
 - `Include`: [33](033-include-shape-functions.md) [44](044-many-to-many.md) [65](065-scoped-relations-use-the-same-filter-path.md) [93](093-tracking-follows-what-a-save-wrote.md) [108](108-kept-sql-by-shape-unboxed-keys-compact-snapshots-and.md)
@@ -694,7 +696,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `timestamps`: [25](025-scanning.md) [41](041-automatic-timestamps.md)
 - `token`: [122](122-what-the-database-fills-is-read-back-by-key.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md) [140](140-an-update-that-changed-nothing-is-checked-against-the-row.md)
 - `tracker`: [29](029-sessions.md) [99](099-a-retried-attempt-leaves-nothing-in-the-tracker.md) [121](121-a-rollback-forgets-what-its-transaction-began-tracking.md)
-- `tracking`: [6](006-return-shapes-and-tracking.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md)
+- `tracking`: [6](006-return-shapes-and-tracking.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) [145](145-with-adds-a-computed-value-without-untracking-a-row.md)
 - `transaction`: [22](022-inserts-run-one-statement-per-row.md) [47](047-hooks-run-inside-the-write.md) [56](056-failure.md)
 - `Tx`: [2](002-tx-is-a-generic-method-on-context.md) [106](106-begin-inside-a-transaction-opens-a-savepoint.md)
 - `Type`: [131](131-a-foreign-key-column-follows-its-target.md) [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md)

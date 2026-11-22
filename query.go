@@ -355,7 +355,7 @@ func (q *Query[T]) With[V any](field *V, value Expr[V]) *Query[T] {
 // a derived row may not match any stored row.
 func (q *Query[T]) tracked() bool {
 	return !q.noTracking && q.state.settings.tracking && q.from == nil &&
-		len(q.selected) == 0 && len(q.omitted) == 0 && len(q.computed) == 0
+		len(q.selected) == 0 && len(q.omitted) == 0
 }
 
 // columns returns the fields the query reads: those Column chose, or all of
@@ -552,12 +552,28 @@ func (q *Query[T]) fetchWith(
 			read = slices.Clone(items)
 		}
 
+		var computed []*T
+		if len(q.computed) > 0 {
+			computed = slices.Clone(items)
+		}
+
 		// A []*T is a []unsafe.Pointer to the tracker, which swaps in the
 		// instances it already holds.
 		q.state.tracker.LoadAll(
 			q.model(),
 			unsafe.Slice((*unsafe.Pointer)(unsafe.Pointer(unsafe.SliceData(items))), len(items)),
 		)
+
+		for i, row := range computed {
+			if items[i] == row {
+				continue
+			}
+
+			for _, c := range q.computed {
+				f := q.model().Column(c.Alias)
+				f.Value(unsafe.Pointer(items[i])).Set(f.Value(unsafe.Pointer(row)))
+			}
+		}
 
 		for i, row := range read {
 			if err := q.refreshLocked(items[i], row); err != nil {
