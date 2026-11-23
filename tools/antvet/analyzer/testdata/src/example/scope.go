@@ -243,3 +243,32 @@ func wrappers(
 func openWrapper[T any](ctx context.Context, repo Repo[T]) {
 	repo.Where(ant.Gt(&P.UserID, 1)).All(ctx)
 }
+
+// Latest and Oldest order by a field, and Load, LoadOne, LoadMissing, Recursive
+// and RecursiveOne take a relation, so each is judged as OrderBy and Include are.
+func ordersAndLoads(ctx context.Context, users *ant.Table[User], posts *ant.Table[Post]) {
+	var loaded User
+
+	users.Where().Latest(&U.At).All(ctx)
+	users.Where().Oldest(&U.At).All(ctx)
+	users.Load(ctx, &U.Posts, &loaded)
+	users.LoadMissing(ctx, &U.Posts, &loaded)
+	posts.LoadOne(ctx, &P.User, &Post{})
+	users.Where().Recursive(&U.Children).All(ctx)
+
+	posts.Where().Latest(&U.At).All(ctx)      // want `Latest on a field of User in a query of Post`
+	posts.Where().Oldest(&U.At).All(ctx)      // want `Oldest on a field of User in a query of Post`
+	posts.Load(ctx, &U.Posts, &Post{})        // want `Load on a field of User in a query of Post`
+	posts.LoadMissing(ctx, &U.Posts, &Post{}) // want `LoadMissing on a field of User in a query of Post`
+	users.LoadOne(ctx, &P.User, &loaded)      // want `LoadOne on a field of Post in a query of User`
+
+	user := &User{}
+	post := &Post{}
+	users.Where().Latest(&user.At).All(ctx)           // want `Latest needs a field of a probe`
+	users.Where().Oldest(&user.At).All(ctx)           // want `Oldest needs a field of a probe`
+	users.Load(ctx, &user.Posts, &loaded)             // want `Load needs a field of a probe`
+	users.LoadOne(ctx, &post.User, &loaded)           // want `LoadOne needs a field of a probe`
+	users.LoadMissing(ctx, &user.Posts, &loaded)      // want `LoadMissing needs a field of a probe`
+	users.Where().Recursive(&user.Children).All(ctx)  // want `Recursive needs a field of a probe`
+	users.Where().RecursiveOne(&user.Parent).All(ctx) // want `RecursiveOne needs a field of a probe`
+}

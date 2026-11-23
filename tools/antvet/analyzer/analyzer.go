@@ -155,6 +155,8 @@ var fieldMethods = map[string]judging{
 	"OrderByDesc":   byScope,
 	"ThenBy":        byScope,
 	"ThenByDesc":    byScope,
+	"Latest":        byScope,
+	"Oldest":        byScope,
 	"GroupBy":       byScope,
 	"Column":        byOwn,
 	"Omit":          byOwn,
@@ -167,6 +169,28 @@ var fieldMethods = map[string]judging{
 	"LeftJoin":      byOwn,
 	"LeftJoinMany":  byOwn,
 	"JoinUsing":     probeOnly,
+	"Load":          byOwn,
+	"LoadOne":       byOwn,
+	"LoadMissing":   byOwn,
+	"Recursive":     byOwn,
+	"RecursiveOne":  byOwn,
+}
+
+// methodFields says where a method of fieldMethods takes its field pointer when
+// that is not its first argument: the Load methods take a context first.
+var methodFields = map[string]fields{
+	"Load":        {1, 1},
+	"LoadOne":     {1, 1},
+	"LoadMissing": {1, 1},
+}
+
+// fieldsOf returns the field pointers among the arguments of method.
+func fieldsOf(method string, args []ast.Expr) []ast.Expr {
+	if f, ok := methodFields[method]; ok {
+		return f.of(args)
+	}
+
+	return first.of(args)
 }
 
 type judging int
@@ -996,7 +1020,7 @@ func (c *checker) fieldArgs(call *ast.CallExpr) (string, []ast.Expr) {
 		return "", nil
 	}
 
-	return selector.Sel.Name, first.of(args)
+	return selector.Sel.Name, fieldsOf(selector.Sel.Name, args)
 }
 
 // antType returns the named type of ant that t is, or points to, or nil.
@@ -1187,10 +1211,10 @@ func (c *checker) checkScope(call *ast.CallExpr, stack []ast.Node) {
 		}
 	case fieldMethods[method] == byScope:
 		if allowed, ok := c.scope(stack, own); ok {
-			c.judge(first.of(args), allowed, own, method)
+			c.judge(fieldsOf(method, args), allowed, own, method)
 		}
 	case fieldMethods[method] == byOwn:
-		c.judge(first.of(args), own, own, method)
+		c.judge(fieldsOf(method, args), own, own, method)
 	case updates[method] && len(args) > 0:
 		for _, arg := range args[1:] {
 			assignment, ok := ast.Unparen(arg).(*ast.CallExpr)

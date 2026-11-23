@@ -47,6 +47,10 @@ func (q *Query[T]) LeftJoin[J any](rel **J) *Join2[T, J]          { return nil }
 func (q *Query[T]) All(ctx context.Context) ([]*T, error)         { return nil, nil }
 func (q *Query[T]) Count(ctx context.Context) (int64, error)      { return 0, nil }
 func (q *Query[T]) OrderBy[V any](field *V) *Query[T]             { return q }
+func (q *Query[T]) Latest(field *time.Time) *Query[T]             { return q }
+func (q *Query[T]) Oldest(field *time.Time) *Query[T]             { return q }
+func (q *Query[T]) Recursive(rel *[]T) *Query[T]                  { return q }
+func (q *Query[T]) RecursiveOne(rel **T) *Query[T]                { return q }
 func (q *Query[T]) Column[V any](field *V) *Query[T]              { return q }
 func (q *Query[T]) With[V any](field *V, value Expr[V]) *Query[T] { return q }
 func (q *Query[T]) IncludeJoined[R any](rel **R) *Query[T]        { return q }
@@ -76,6 +80,18 @@ func (t *Table[T]) Where(c ...Cond) *Query[T]         { return nil }
 func (t *Table[T]) OrderBy[V any](field *V) *Query[T] { return nil }
 func (t *Table[T]) Find[K comparable](ctx context.Context, key K) (*T, error) {
 	return nil, nil
+}
+
+func (t *Table[T]) Load[R any](ctx context.Context, rel *[]R, entities ...*T) error {
+	return nil
+}
+
+func (t *Table[T]) LoadOne[R any](ctx context.Context, rel **R, entities ...*T) error {
+	return nil
+}
+
+func (t *Table[T]) LoadMissing[R any](ctx context.Context, rel *[]R, entities ...*T) error {
+	return nil
 }
 
 type Join2[A, B any] struct{}

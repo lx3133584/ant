@@ -10,17 +10,21 @@ import (
 )
 
 type User struct {
-	ID    int64
-	Age   int
-	Name  string
-	At    time.Time
-	Posts []Post
+	ID       int64
+	Age      int
+	Name     string
+	At       time.Time
+	Posts    []Post
+	Children []User
+	Parent   *User
 }
 
 type Post struct {
-	ID     string
-	UserID int64
-	User   *User
+	ID       string
+	UserID   int64
+	User     *User
+	Children []Post
+	Parent   *Post
 }
 
 // Member is User under another name, as a test package might alias a fixture.
