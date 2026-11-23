@@ -200,6 +200,7 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [40](040-soft-deletes-are-a-filter.md) | Soft deletes are a filter | active | `soft-delete` `DeletedAt` `ForceDelete` `Remove` `DeleteByID` |
 | [47](047-hooks-run-inside-the-write.md) | Hooks run inside the write | active | `hooks` `BeforeInsert` `AfterInsert` `Validate` `Upsert` `Observer` `transaction` `bulk` |
 | [123](123-an-after-hooks-edit-is-a-change-to-save.md) | An After hook's edit is a change still to save | active | `hooks` `AfterInsert` `AfterUpdate` `snapshot` `SaveChanges` `Upsert` |
+| [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md) | Insert validation leaves zero default fields to the database | active | `Validate` `default` `Insert` `Upsert` `Required` `zero-value` |
 
 #### Errors
 
@@ -368,7 +369,7 @@ Before changing a file, read the decisions about it.
 | `expr.go` | [35](035-typed-expressions.md) [43](043-database-specific-helpers.md) [68](068-sensitive-values-are-wrapped-when-bound.md) [145](145-helpers-take-a-field-of-any-type.md) [146](146-ne-matches-null-as-go-does.md) [147](147-a-projection-reads-null-into-a-plain-field-as-zero.md) |
 | `go.mod` | [10](010-module-path.md) |
 | `graph.go` | [93](093-tracking-follows-what-a-save-wrote.md) [120](120-the-root-does-not-track-and-a-session-does.md) |
-| `hooks.go` | [47](047-hooks-run-inside-the-write.md) [105](105-read-mostly-registries-are-copy-on-write-snapshots.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md) [154](154-the-ctx-carries-the-transaction.md) |
+| `hooks.go` | [47](047-hooks-run-inside-the-write.md) [105](105-read-mostly-registries-are-copy-on-write-snapshots.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md) [154](154-the-ctx-carries-the-transaction.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md) |
 | `include.go` | [33](033-include-shape-functions.md) [44](044-many-to-many.md) [65](065-scoped-relations-use-the-same-filter-path.md) [93](093-tracking-follows-what-a-save-wrote.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) |
 | `intercept.go` | [46](046-interceptors.md) |
 | `internal/errs/errs.go` | [17](017-implemented-ahead-of-the-skeleton.md) [125](125-open-refuses-a-model-it-would-misread.md) |
@@ -473,7 +474,7 @@ Before changing a file, read the decisions about it.
 | `tests/features/lifecycle/timestamps_test.go` | [41](041-automatic-timestamps.md) [90](090-merge-keeps-what-other-writes-keep.md) [96](096-a-forced-update-stamps-updatedat.md) [111](111-a-replaced-entity-keeps-what-the-body-could-not-give.md) |
 | `tests/features/lifecycle/upsert_version_test.go` | [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [103](103-an-upserts-update-stamps-updatedat.md) |
 | `tests/features/lifecycle/utc_test.go` | [41](041-automatic-timestamps.md) [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) |
-| `tests/features/lifecycle/validate_test.go` | [47](047-hooks-run-inside-the-write.md) |
+| `tests/features/lifecycle/validate_test.go` | [47](047-hooks-run-inside-the-write.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md) |
 | `tests/features/loading/include_test.go` | [33](033-include-shape-functions.md) |
 | `tests/features/loading/shaped_include_test.go` | [33](033-include-shape-functions.md) |
 | `tests/features/migrations` | [117](117-the-migrate-program-takes-the-applications-options.md) |
@@ -616,7 +617,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `Configure`: [21](021-configuration-runs-when-a-context-opens.md) [66](066-several-models-can-share-a-table.md) [83](083-antvet-judges-only-what-it-can-see.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md)
 - `CTE`: [36](036-derived-tables-keep-the-models-name.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md)
 - `decimal`: [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [145](145-helpers-take-a-field-of-any-type.md)
-- `default`: [51](051-modeling-added-for-migrations.md) [52](052-new-not-null-columns-fill-existing-rows.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [150](150-a-zero-key-nothing-fills-is-refused.md)
+- `default`: [51](051-modeling-added-for-migrations.md) [52](052-new-not-null-columns-fill-existing-rows.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [150](150-a-zero-key-nothing-fills-is-refused.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md)
 - `Delete`: [23](023-guarding-bulk-writes.md) [38](038-bulk-writes.md)
 - `DeletedAt`: [40](040-soft-deletes-are-a-filter.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md) [151](151-deletedat-is-a-time-or-null-in-json.md)
 - `derived-table`: [36](036-derived-tables-keep-the-models-name.md) [81](081-a-set-operations-members-keep-their-own-paging.md) [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md)
@@ -658,6 +659,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `In`: [24](024-raw-sql-arguments.md) [95](095-in-means-eq-and-other-value-rules.md) [146](146-ne-matches-null-as-go-does.md)
 - `Include`: [33](033-include-shape-functions.md) [44](044-many-to-many.md) [65](065-scoped-relations-use-the-same-filter-path.md) [93](093-tracking-follows-what-a-save-wrote.md) [108](108-kept-sql-by-shape-unboxed-keys-compact-snapshots-and.md)
 - `inet`: [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md)
+- `Insert`: [22](022-inserts-run-one-statement-per-row.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md)
 - `InsertMany`: [22](022-inserts-run-one-statement-per-row.md) [38](038-bulk-writes.md) [103](103-an-upserts-update-stamps-updatedat.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [124](124-a-conflict-target-repeats-a-partial-indexs-predicate.md)
 - `Interceptor`: [46](046-interceptors.md) [97](097-spans-name-the-database-the-dialect-talks-to.md)
 - `interval`: [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md)
@@ -748,12 +750,13 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `Update`: [23](023-guarding-bulk-writes.md) [38](038-bulk-writes.md) [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [140](140-an-update-that-changed-nothing-is-checked-against-the-row.md)
 - `UpdatedAt`: [41](041-automatic-timestamps.md) [80](080-every-write-moves-the-version-on.md) [96](096-a-forced-update-stamps-updatedat.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md) [103](103-an-upserts-update-stamps-updatedat.md) [111](111-a-replaced-entity-keeps-what-the-body-could-not-give.md)
 - `UpdateMany`: [89](089-one-column-one-value.md) [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md) [140](140-an-update-that-changed-nothing-is-checked-against-the-row.md)
-- `Upsert`: [47](047-hooks-run-inside-the-write.md) [75](075-generated-values-without-returning.md) [80](080-every-write-moves-the-version-on.md) [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md) [89](089-one-column-one-value.md) [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [103](103-an-upserts-update-stamps-updatedat.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md) [124](124-a-conflict-target-repeats-a-partial-indexs-predicate.md)
+- `Upsert`: [47](047-hooks-run-inside-the-write.md) [75](075-generated-values-without-returning.md) [80](080-every-write-moves-the-version-on.md) [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md) [89](089-one-column-one-value.md) [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [103](103-an-upserts-update-stamps-updatedat.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md) [124](124-a-conflict-target-repeats-a-partial-indexs-predicate.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md)
 - `UseConn`: [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md)
 - `UseTx`: [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md)
 - `utc`: [41](041-automatic-timestamps.md) [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md)
 - `UTCTimes`: [74](074-dialects-state-their-differences.md) [76](076-one-clock-for-times-without-a-zone.md)
 - `uuid`: [131](131-a-foreign-key-column-follows-its-target.md) [145](145-helpers-take-a-field-of-any-type.md) [150](150-a-zero-key-nothing-fills-is-refused.md)
+- `Validate`: [47](047-hooks-run-inside-the-write.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md)
 - `valuer`: [42](042-converters-are-scanner-and-valuer.md) [92](092-tracked-values-compare-as-stored.md)
 - `version`: [80](080-every-write-moves-the-version-on.md) [90](090-merge-keeps-what-other-writes-keep.md) [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [93](093-tracking-follows-what-a-save-wrote.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md) [110](110-a-version-the-application-sets-is-the-one-checked.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md) [140](140-an-update-that-changed-nothing-is-checked-against-the-row.md)
 - `warning`: [52](052-new-not-null-columns-fill-existing-rows.md) [55](055-renames.md)
@@ -765,6 +768,6 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `WithoutAutoTx`: [31](031-failed-saves.md) [63](063-savechanges-batches-inserts.md)
 - `WithReplicas`: [48](048-replicas.md) [61](061-sessions-take-options.md)
 - `WithTracking`: [29](029-sessions.md) [61](061-sessions-take-options.md) [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [120](120-the-root-does-not-track-and-a-session-does.md)
-- `zero-value`: [19](019-a-zero-generated-key-means-assign-one.md) [52](052-new-not-null-columns-fill-existing-rows.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [147](147-a-projection-reads-null-into-a-plain-field-as-zero.md) [150](150-a-zero-key-nothing-fills-is-refused.md)
+- `zero-value`: [19](019-a-zero-generated-key-means-assign-one.md) [52](052-new-not-null-columns-fill-existing-rows.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [147](147-a-projection-reads-null-into-a-plain-field-as-zero.md) [150](150-a-zero-key-nothing-fills-is-refused.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md)
 
 <!-- end of index -->
