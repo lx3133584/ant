@@ -2,6 +2,7 @@ package ant
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"reflect"
@@ -124,10 +125,16 @@ func (n *node) hook(ctx context.Context, run func(any) error) error {
 
 // checkRules runs the model's field rules. An insert leaves a zero default
 // field to the database, so the value the database will store is not checked in Go.
+//
+// Every failing field is reported, joined, so a form gets all its errors at
+// once. errors.As still reaches the first of them, as it did when the first
+// was the only one.
 func (n *node) checkRules(ctx context.Context) error {
 	if ctx.Value(skipHooks{}) != nil {
 		return nil
 	}
+
+	var failures []error
 
 	for _, rule := range n.model.Rules {
 		if n.insert && rule.Field.Default && rule.Field.Value(n.entity).IsZero() {
@@ -135,11 +142,15 @@ func (n *node) checkRules(ctx context.Context) error {
 		}
 
 		if err := rule.Check(n.entity); err != nil {
-			return &ValidationError{Model: n.model.Type.Name(), Field: rule.Field.Short, Err: err}
+			failures = append(failures, &ValidationError{
+				Model: n.model.Type.Name(),
+				Field: rule.Field.Short,
+				Err:   err,
+			})
 		}
 	}
 
-	return nil
+	return errors.Join(failures...)
 }
 
 func (n *node) beforeInsert(ctx context.Context) error {

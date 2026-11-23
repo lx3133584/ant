@@ -245,3 +245,23 @@ func TestDefaultFieldRules(t *testing.T) {
 		require.ErrorContains(t, err, "Status", "an upsert's update branch can write the zero")
 	})
 }
+
+// Every failing rule is reported, not just the first, so an API can answer a
+// form with all its field errors at once.
+func TestFieldRulesReportEveryField(t *testing.T) {
+	fixture.RunTrackedWith(t, validDDL, func(t *testing.T, db *ValidDB) {
+		ctx := t.Context()
+
+		err := db.Signups.Insert(ctx, &Signup{Name: "", Email: "not-an-email", Age: 999})
+		require.Error(t, err)
+
+		// errors.As reaches the first of the joined errors, as before.
+		var invalid *ant.ValidationError
+		require.ErrorAs(t, err, &invalid)
+
+		// Every field is named somewhere in the message.
+		for _, field := range []string{"Name", "Email", "Age"} {
+			require.ErrorContains(t, err, field)
+		}
+	})
+}
