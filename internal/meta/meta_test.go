@@ -702,3 +702,51 @@ func TestIndirect(t *testing.T) {
 		}
 	}
 }
+
+// TestProbesDoNotOverlap guards the invariant a binary-search lookup relies on:
+// the address ranges probes occupy are disjoint, so the range covering an
+// address is the only candidate and Resolve can stop at the first one whose
+// base is at or below it.
+func TestProbesDoNotOverlap(t *testing.T) {
+	// Register a few models so more than one probe is present.
+	Probe[user]()
+	Probe[post]()
+
+	probes := loadProbes()
+	for i, a := range probes {
+		aEnd := a.base + a.model.Type.Size()
+
+		for j, b := range probes {
+			if i == j {
+				continue
+			}
+
+			bEnd := b.base + b.model.Type.Size()
+			if a.base < bEnd && b.base < aEnd {
+				t.Errorf(
+					"probes %d (%s, %#x+%#x) and %d (%s, %#x+%#x) overlap",
+					i,
+					a.model.Type,
+					a.base,
+					a.model.Type.Size(),
+					j,
+					b.model.Type,
+					b.base,
+					b.model.Type.Size(),
+				)
+			}
+		}
+	}
+}
+
+// BenchmarkResolve measures a field lookup as more models register, the cost
+// the binary search replaces a linear scan of.
+func BenchmarkResolve(b *testing.B) {
+	u := Probe[user]()
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		Resolve(&u.Name)
+	}
+}
