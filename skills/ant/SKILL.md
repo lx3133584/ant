@@ -371,7 +371,9 @@ err = session.SaveChanges(ctx)
   holds it now. A has-one with `Latest` or `Oldest` is a view of many rows, so
   replacing or clearing it deletes nothing. A soft-deleted old row keeps its key,
   so a unique index on that key must leave deleted rows out
-  (`WHERE deleted_at IS NULL`).
+  (`WHERE deleted_at IS NULL`). A target-side `Eq` in a relation `Where` assigns its
+  value when the relation gains a row; other scope conditions only filter reads.
+  An unmoved loaded relation does not reapply the scope over explicit edits.
 - `NoTracking()` on a query skips tracking for read-only work and is faster. `Each`,
   `Column`, `Omit`, `Raw`, `Select` and `Project` results are never tracked, so
   changing them saves nothing. `With` rows are tracked; their computed fields are

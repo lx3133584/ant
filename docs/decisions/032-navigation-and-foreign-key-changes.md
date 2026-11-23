@@ -2,11 +2,11 @@
 id: 32
 title: "Navigation and foreign key changes"
 area: tracking
-status: active
+status: amended
 tags: [foreign-key, navigation, move-child, unlink, SaveChanges]
 issues: []
 related: [93, 111]
-changed_by: []
+changed_by: [156]
 code: [unit.go, internal/track/track.go]
 tests: [tests/features/change_tracking/relations_test.go, tests/features/change_tracking/graph_tracking_test.go]
 ---
@@ -16,6 +16,8 @@ tests: [tests/features/change_tracking/relations_test.go, tests/features/change_
 **In short:** A relation holding what was loaded leaves the foreign key alone; a row moved between relations updates only its foreign key; an emptied loaded pointer unlinks.
 
 > **Note.** Decision 111 refines the zero-foreign-key case.
+
+> **Amended.** Decision 156 also writes target-side `Eq` scope values when a row enters a scoped relation; an unmoved relation still leaves direct edits alone.
 
 ## Decision
 

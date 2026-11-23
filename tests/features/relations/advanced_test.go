@@ -258,12 +258,15 @@ func TestPolymorphicRelations(t *testing.T) {
 	})
 }
 
+var fictionGenre = "fiction"
+
 // Novelist shows scoped relations, latest-of-many, and inverse relations.
 type Novelist struct {
 	ID       int64
 	Name     string
 	Novels   []Novel
 	Live     []Novel
+	Fiction  []Novel
 	Newest   *Novel
 	Earliest *Novel
 }
@@ -271,6 +274,11 @@ type Novelist struct {
 func (Novelist) Configure(b *ant.ModelBuilder[Novelist]) {
 	b.HasMany(&Novelists.Novels).ForeignKey(&Novels.NovelistID).Inverse(&Novels.Novelist)
 	b.HasMany(&Novelists.Live).ForeignKey(&Novels.NovelistID).Where(ant.Eq(&Novels.Published, true))
+
+	b.HasMany(&Novelists.Fiction).
+		ForeignKey(&Novels.NovelistID).
+		Where(ant.Eq(&Novels.Genre, &fictionGenre))
+
 	b.HasOne(&Novelists.Newest).ForeignKey(&Novels.NovelistID).Latest(&Novels.Year)
 	b.HasOne(&Novelists.Earliest).ForeignKey(&Novels.NovelistID).Oldest(&Novels.Year)
 }
@@ -282,6 +290,7 @@ type Novel struct {
 	Title      string
 	Year       int
 	Published  bool
+	Genre      *string
 	Novelist   *Novelist
 }
 
@@ -300,7 +309,7 @@ var (
 
 const libraryDDL = `
 	CREATE TABLE novelists (id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL);
-	CREATE TABLE novels (id BIGSERIAL PRIMARY KEY, novelist_id BIGINT NOT NULL, title TEXT NOT NULL, year INT NOT NULL, published BOOLEAN NOT NULL)`
+	CREATE TABLE novels (id BIGSERIAL PRIMARY KEY, novelist_id BIGINT NOT NULL, title TEXT NOT NULL, year INT NOT NULL, published BOOLEAN NOT NULL, genre TEXT)`
 
 func TestScopedAndChosenRelations(t *testing.T) {
 	fixture.RunWith(t, libraryDDL, func(t *testing.T, db *LibraryDB) {
@@ -354,6 +363,166 @@ func TestScopedAndChosenRelations(t *testing.T) {
 			require.NoError(t, err)
 			require.Same(t, loaded, loaded.Novels[0].Novelist)
 		})
+	})
+}
+
+func TestScopedRelationSetsEqValuesOnSave(t *testing.T) {
+	fixture.RunTrackedWith(t, libraryDDL, func(t *testing.T, db *LibraryDB) {
+		ctx := t.Context()
+		author := &Novelist{Name: "A"}
+		require.NoError(t, db.Novelists.Insert(ctx, author))
+		draft := &Novel{NovelistID: author.ID, Title: "second"}
+		require.NoError(t, db.Novels.Insert(ctx,
+			&Novel{NovelistID: author.ID, Title: "first", Published: true},
+			draft,
+			&Novel{NovelistID: author.ID, Title: "third", Published: true}))
+
+		require.NoError(t, db.ClearTracked(ctx))
+
+		loaded, err := db.Novelists.Include(&Novelists.Live).Find(ctx, author.ID)
+		require.NoError(t, err)
+		require.Len(t, loaded.Live, 2)
+
+		loaded.Live = append(loaded.Live, Novel{Title: "new-live"})
+
+		require.NoError(t, db.SaveChanges(ctx))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		reloaded, err := db.Novelists.Include(&Novelists.Live).Find(ctx, author.ID)
+		require.NoError(t, err)
+		require.Len(t, reloaded.Live, 3)
+
+		stored, err := db.Novels.Where(ant.Eq(&Novels.Title, "new-live")).Single(ctx)
+		require.NoError(t, err)
+		require.True(t, stored.Published)
+
+		reloaded.Live = append(reloaded.Live, Novel{ID: draft.ID})
+
+		require.NoError(t, db.SaveChanges(ctx))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		reloaded, err = db.Novelists.Include(&Novelists.Live).Find(ctx, author.ID)
+		require.NoError(t, err)
+		require.Len(t, reloaded.Live, 4)
+
+		stored, err = db.Novels.Find(ctx, draft.ID)
+		require.NoError(t, err)
+		require.True(t, stored.Published)
+		require.Equal(t, "second", stored.Title, "a scoped save writes only the relation's fields")
+
+		editedTitle := reloaded.Live[0].Title
+		reloaded.Live[0].Published = false
+
+		require.NoError(t, db.SaveChanges(ctx))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		stored, err = db.Novels.Where(ant.Eq(&Novels.Title, editedTitle)).Single(ctx)
+		require.NoError(t, err)
+
+		require.False(
+			t,
+			stored.Published,
+			"an unmoved relation does not overwrite an explicit edit",
+		)
+	})
+}
+
+func TestScopedRelationCopiesPointerEqValues(t *testing.T) {
+	fixture.RunTrackedWith(t, libraryDDL, func(t *testing.T, db *LibraryDB) {
+		ctx := t.Context()
+		author := &Novelist{Name: "A"}
+		require.NoError(t, db.Novelists.Insert(ctx, author))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		loaded, err := db.Novelists.Include(&Novelists.Fiction).Find(ctx, author.ID)
+		require.NoError(t, err)
+		require.Empty(t, loaded.Fiction)
+
+		loaded.Fiction = append(loaded.Fiction, Novel{Title: "one"}, Novel{Title: "two"})
+
+		require.NoError(t, db.SaveChanges(ctx))
+
+		first := loaded.Fiction[0].Genre
+		second := loaded.Fiction[1].Genre
+
+		require.NotNil(t, first)
+		require.NotNil(t, second)
+		require.Equal(t, fictionGenre, *first)
+		require.Equal(t, fictionGenre, *second)
+		require.NotSame(t, &fictionGenre, first, "a row must not hold the scope's own pointer")
+		require.NotSame(t, first, second, "each row needs its own value")
+
+		*first = "mystery"
+
+		require.Equal(
+			t,
+			"fiction",
+			fictionGenre,
+			"editing a row must not move the relation's scope",
+		)
+
+		require.Equal(t, "fiction", *second, "editing one row must not change another")
+	})
+}
+
+func TestScopedRelationDetachesEqualPointerEqValues(t *testing.T) {
+	fixture.RunTrackedWith(t, libraryDDL, func(t *testing.T, db *LibraryDB) {
+		ctx := t.Context()
+		author := &Novelist{Name: "A"}
+		require.NoError(t, db.Novelists.Insert(ctx, author))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		loaded, err := db.Novelists.Include(&Novelists.Fiction).Find(ctx, author.ID)
+		require.NoError(t, err)
+
+		shared := fictionGenre
+		loaded.Fiction = append(
+			loaded.Fiction,
+			Novel{Title: "scope", Genre: &fictionGenre},
+			Novel{Title: "shared", Genre: &shared},
+		)
+
+		require.NoError(t, db.SaveChanges(ctx))
+
+		first := loaded.Fiction[0].Genre
+		second := loaded.Fiction[1].Genre
+
+		require.NotSame(t, &fictionGenre, first, "an equal value must still be detached")
+		require.NotSame(t, &shared, second, "an existing equal pointer must not survive")
+		require.NotSame(t, first, second)
+
+		*first = "mystery"
+
+		require.Equal(t, "fiction", fictionGenre)
+		require.Equal(t, "fiction", shared)
+		require.Equal(t, "fiction", *second)
+	})
+}
+
+func TestScopedRelationLeavesKeylessLoadedRowEdits(t *testing.T) {
+	fixture.RunTrackedWith(t, libraryDDL, func(t *testing.T, db *LibraryDB) {
+		ctx := t.Context()
+		author := &Novelist{Name: "A"}
+		require.NoError(t, db.Novelists.Insert(ctx, author))
+		novel := &Novel{NovelistID: author.ID, Title: "original", Published: true}
+		require.NoError(t, db.Novels.Insert(ctx, novel))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		loaded, err := db.Novelists.Include(&Novelists.Live).Find(ctx, author.ID)
+		require.NoError(t, err)
+		require.Len(t, loaded.Live, 1)
+
+		replacement := Novel{ID: loaded.Live[0].ID, Title: "replacement"}
+		loaded.Live[0] = replacement
+
+		require.NoError(t, db.SaveChanges(ctx))
+		require.NoError(t, db.ClearTracked(ctx))
+
+		stored, err := db.Novels.Find(ctx, replacement.ID)
+		require.NoError(t, err)
+		require.Equal(t, author.ID, stored.NovelistID, "the relation repairs the missing key")
+		require.Equal(t, "replacement", stored.Title)
+		require.False(t, stored.Published, "an unmoved row keeps its explicit scoped edit")
 	})
 }
 

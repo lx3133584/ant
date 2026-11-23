@@ -2,11 +2,11 @@
 id: 65
 title: "Scoped relations use the same filter path"
 area: relations
-status: active
+status: amended
 tags: [Where, Morph, Latest, Oldest, ErrNoForeignKey, polymorphic, Include, Has]
 issues: [198]
 related: [44]
-changed_by: []
+changed_by: [156]
 code: [config.go, internal/meta/meta.go, include.go, errors.go]
 tests: [tests/features/relations/ambiguous_test.go, tests/features/relations/advanced_test.go]
 ---
@@ -14,6 +14,8 @@ tests: [tests/features/relations/ambiguous_test.go, tests/features/relations/adv
 # 65. Scoped relations use the same filter path
 
 **In short:** Relation Where, Morph, Latest and Oldest add their conditions in Include, Has and joins, and two unscoped relations sharing a foreign key by convention return ErrNoForeignKey.
+
+> **Amended.** Decision 156 also applies target-side `Eq` values when a direct scoped relation gains a row.
 
 ## Decision
 
