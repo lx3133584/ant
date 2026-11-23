@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/skudra-go/ant/internal/meta"
@@ -277,11 +278,34 @@ func (b *builder) ready() error {
 
 	for _, ref := range b.refs {
 		if _, ok := b.sourceFor(ref); !ok {
-			return errors.Join(err, ErrWrongModel)
+			return errors.Join(err, fmt.Errorf(
+				"%w: %s is not in a query of %s",
+				ErrWrongModel,
+				ref.Type.Name(),
+				b.queryNames(),
+			))
 		}
 	}
 
 	return err
+}
+
+// queryNames lists the models the query reads from, for an error that has to
+// say which model the offending field belonged to and which was expected.
+func (b *builder) queryNames() string {
+	names := make([]string, 0, len(b.sources))
+
+	for _, s := range b.sources {
+		if s.model != nil {
+			names = append(names, s.model.Type.Name())
+		}
+	}
+
+	if len(names) == 0 {
+		return "no model"
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // filters returns a source's global filters, resolved at render time.

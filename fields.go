@@ -1,6 +1,8 @@
 package ant
 
 import (
+	"fmt"
+
 	"github.com/skudra-go/ant/internal/meta"
 	"github.com/skudra-go/ant/qb"
 )
@@ -36,7 +38,14 @@ func fieldOf[V any](field *V) (*meta.Field, *meta.Model, error) {
 	case !ok:
 		return nil, nil, ErrNotProbe
 	case ref.Field == nil:
-		return nil, nil, ErrNotColumn
+		// The model and relation are here even though the field is not, so the
+		// error names what it is: User.Posts, not just "a relation".
+		return nil, nil, fmt.Errorf(
+			"%w: %s.%s",
+			ErrNotColumn,
+			ref.Model.Type.Name(),
+			ref.Relation.Name,
+		)
 	}
 
 	return ref.Field, ref.Model, nil
@@ -50,7 +59,8 @@ func relation[V any](field *V) (*meta.Relation, error) {
 	case !ok:
 		return nil, ErrNotProbe
 	case ref.Relation == nil:
-		return nil, ErrNotRelation
+		// A column used as a relation names itself, as User.Name.
+		return nil, fmt.Errorf("%w: %s.%s", ErrNotRelation, ref.Model.Type.Name(), ref.Field.Name)
 	}
 
 	return ref.Relation, nil
