@@ -89,7 +89,10 @@ adults, err := db.Users.
 - DSN settings that matter: MySQL and MariaDB need `parseTime=true`,
   and `ant.Open` refuses a DSN without it. SQLite wants
   `_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate`,
-  and `ant.Open` refuses a DSN that does not set `foreign_keys`.
+  and `ant.Open` refuses a DSN that does not set all three. The driver's
+  `_busy_timeout` / `_timeout` shorthand is also accepted; empty values are not
+  choices. `foreign_keys(0)`, `busy_timeout(0)`, and `_txlock=deferred` are
+  explicit opt-outs.
 
 ## Columns are field pointers
 

@@ -222,8 +222,9 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [76](076-one-clock-for-times-without-a-zone.md) | One clock for times without a zone | active | `utc` `UTCTimes` `sqlite` `sqlserver` `datetime2` `time-zone` |
 | [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md) | MySQL reads the table it writes through a derived table | active | `mysql` `error-1093` `derived-table` `no-merge` `self-read` `Upsert` `on-duplicate-key` `lazy` |
 | [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md) | SQL Server recurses with UNION ALL and a path of keys | active | `sqlserver` `Recursive` `CTE` `union-all` `maxrecursion` `count` `exists` |
-| [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) | A SQLite DSN says whether foreign keys are on | active | `sqlite` `foreign-keys` `dsn` `CheckDSN` |
+| [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) | A SQLite DSN says whether foreign keys are on | amended by [159](159-a-sqlite-dsn-names-its-lock-behavior.md) | `sqlite` `foreign-keys` `dsn` `CheckDSN` |
 | [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) | Stored tsvector columns have a separate Match helper, and Match writes its configuration | active | `postgres` `Match` `MatchVector` `tsvector` `full-text` `regconfig` `indexes` |
+| [159](159-a-sqlite-dsn-names-its-lock-behavior.md) | A SQLite DSN names its lock behavior | active | `sqlite` `dsn` `CheckDSN` `busy_timeout` `_txlock` `SQLITE_BUSY` |
 
 #### Migrations and schema
 
@@ -356,8 +357,8 @@ Before changing a file, read the decisions about it.
 | `dialect/render.go` | [36](036-derived-tables-keep-the-models-name.md) [38](038-bulk-writes.md) [39](039-global-filters-are-lazy.md) [44](044-many-to-many.md) [49](049-postgresql-first.md) [74](074-dialects-state-their-differences.md) [81](081-a-set-operations-members-keep-their-own-paging.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md) [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [95](095-in-means-eq-and-other-value-rules.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md) [124](124-a-conflict-target-repeats-a-partial-indexs-predicate.md) |
 | `dialect/render_test.go` | [49](049-postgresql-first.md) [74](074-dialects-state-their-differences.md) |
 | `dialect/self_reads_test.go` | [38](038-bulk-writes.md) [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md) |
-| `dialect/sqlite/sqlite.go` | [74](074-dialects-state-their-differences.md) [76](076-one-clock-for-times-without-a-zone.md) [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) [152](152-open-refuses-values-the-driver-cannot-take.md) |
-| `dialect/sqlite/sqlite_test.go` | [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) |
+| `dialect/sqlite/sqlite.go` | [74](074-dialects-state-their-differences.md) [76](076-one-clock-for-times-without-a-zone.md) [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) [152](152-open-refuses-values-the-driver-cannot-take.md) [159](159-a-sqlite-dsn-names-its-lock-behavior.md) |
+| `dialect/sqlite/sqlite_test.go` | [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) [159](159-a-sqlite-dsn-names-its-lock-behavior.md) |
 | `dialect/sqlserver/sqlserver.go` | [74](074-dialects-state-their-differences.md) [76](076-one-clock-for-times-without-a-zone.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md) [152](152-open-refuses-values-the-driver-cannot-take.md) |
 | `dialect/syntax.go` | [31](031-failed-saves.md) [45](045-errors-are-classified-not-wrapped.md) [74](074-dialects-state-their-differences.md) [76](076-one-clock-for-times-without-a-zone.md) [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md) [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) [152](152-open-refuses-values-the-driver-cannot-take.md) |
 | `dialect/syntax_test.go` | [74](074-dialects-state-their-differences.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md) |
@@ -609,6 +610,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `bulk-write`: [23](023-guarding-bulk-writes.md) [38](038-bulk-writes.md)
 - `change-tracking`: [92](092-tracked-values-compare-as-stored.md) [93](093-tracking-follows-what-a-save-wrote.md)
 - `check`: [127](127-commands-refuse-to-guess-which-migration-is-meant.md) [130](130-partitioning-is-part-of-the-table.md)
+- `CheckDSN`: [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) [159](159-a-sqlite-dsn-names-its-lock-behavior.md)
 - `Chunk`: [81](081-a-set-operations-members-keep-their-own-paging.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) [143](143-paging-arguments-out-of-range-are-errpaging.md)
 - `ChunkByKey`: [81](081-a-set-operations-members-keep-their-own-paging.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) [143](143-paging-arguments-out-of-range-are-errpaging.md)
 - `closure`: [5](005-select-closures-run-client-side.md) [9](009-owner-review-of-step-1.md)
@@ -628,6 +630,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `Discriminator`: [66](066-several-models-can-share-a-table.md) [90](090-merge-keeps-what-other-writes-keep.md)
 - `DoUpdate`: [80](080-every-write-moves-the-version-on.md) [89](089-one-column-one-value.md) [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [103](103-an-upserts-update-stamps-updatedat.md)
 - `drift`: [55](055-renames.md) [57](057-drift-compares-what-the-server-stored.md) [59](059-adopting-an-existing-database.md) [72](072-partitions-are-not-migrations.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [130](130-partitioning-is-part-of-the-table.md) [133](133-a-concurrent-build-clears-its-leftover.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
+- `dsn`: [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) [159](159-a-sqlite-dsn-names-its-lock-behavior.md)
 - `Each`: [6](006-return-shapes-and-tracking.md) [27](027-all-returns-t.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md)
 - `embed`: [60](060-one-program-two-jobs.md) [113](113-a-missing-versions-folder-is-an-error.md)
 - `embedded`: [87](087-an-embedded-field-must-be-a-struct-value.md) [125](125-open-refuses-a-model-it-would-misread.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md)
@@ -734,7 +737,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `snapshot`: [123](123-an-after-hooks-edit-is-a-change-to-save.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md)
 - `soft-delete`: [40](040-soft-deletes-are-a-filter.md) [80](080-every-write-moves-the-version-on.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md) [124](124-a-conflict-target-repeats-a-partial-indexs-predicate.md) [151](151-deletedat-is-a-time-or-null-in-json.md)
 - `sql.Null`: [51](051-modeling-added-for-migrations.md) [147](147-a-projection-reads-null-into-a-plain-field-as-zero.md)
-- `sqlite`: [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md)
+- `sqlite`: [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) [159](159-a-sqlite-dsn-names-its-lock-behavior.md)
 - `sqlserver`: [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md)
 - `step-1`: [8](008-step-1-file-count.md) [9](009-owner-review-of-step-1.md)
 - `subquery`: [37](037-references-to-outer-queries.md) [38](038-bulk-writes.md) [83](083-antvet-judges-only-what-it-can-see.md)

@@ -121,7 +121,7 @@ import _ "modernc.org/sqlite"                 // SQLite
 import _ "github.com/microsoft/go-mssqldb"    // SQL Server
 ```
 
-Use `parseTime=true` in a MySQL or MariaDB DSN: without it times come back as bytes, so `ant.Open` refuses the DSN. A pool passed to `ant.Wrap` is not checked. Use `_pragma=foreign_keys(1)` in a SQLite DSN, or foreign keys are not enforced, and see above for writers at once.
+Use `parseTime=true` in a MySQL or MariaDB DSN: without it times come back as bytes, so `ant.Open` refuses the DSN. A pool passed to `ant.Wrap` is not checked. A SQLite DSN names all three connection settings, as in `_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate`; `ant.Open` refuses an incomplete DSN so foreign keys stay on and concurrent writes wait for locks and begin immediately. The driver's `_busy_timeout` / `_timeout` shorthand is also accepted for `busy_timeout`; empty values do not count as a choice. `foreign_keys(0)`, `busy_timeout(0)`, and `_txlock=deferred` are explicit opt-outs.
 
 `go-mssqldb`, as of v1.11.2, rolls a transaction back with the context it began with, and if that context has ended, it leaves a goroutine reading the connection after the connection went back to the pool, where the next statement races it. ant begins its own transactions, from `Tx`, `Begin`, `SaveChanges`, and `DryRun`, on a context that does not end, on a connection taken with yours, and rolls them back itself when yours ends, so they never meet this. A transaction you begin yourself and pass to `UseTx` can: on SQL Server, end it before its context does.
 

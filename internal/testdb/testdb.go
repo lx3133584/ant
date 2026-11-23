@@ -181,7 +181,7 @@ func (target *Target) Connect(t *testing.T) {
 
 	if target.Name == "sqlite" {
 		path := filepath.Join(t.TempDir(), "ant.db")
-		target.DSN = "file:" + path + "?_pragma=foreign_keys(1)"
+		target.DSN = "file:" + path + "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate"
 	}
 
 	db := target.open(t)
