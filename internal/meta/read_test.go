@@ -209,6 +209,109 @@ func TestReadDuration(t *testing.T) {
 	require.Equal(t, sql.Null[time.Duration]{}, n)
 }
 
+// SQLite's driver writes time.Time.String by default, or SQLite's own text
+// format when _time_format=sqlite is set. An aggregate has no declared type,
+// so ant reads those texts using the destination's time type (#317).
+func TestReadTimeText(t *testing.T) {
+	withNanos := time.Date(2026, 11, 14, 23, 26, 36, 84719638, time.UTC)
+	withSeconds := time.Date(2026, 11, 14, 23, 26, 0, 0, time.UTC)
+	midnight := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+
+	for _, tc := range []struct {
+		text string
+		want time.Time
+	}{
+		{"2026-11-14 23:26:36.084719638 +0000 UTC", withNanos},
+		{"2026-11-14 23:26:36.084719638 +0000 UTC m=+0.000000001", withNanos},
+		{"2026-11-14 23:26:36.084719638+00:00", withNanos},
+		{"2026-11-14T23:26:36.084719638Z", withNanos},
+		{"2026-11-14 23:26:36.084719638", withNanos},
+		{"2026-11-14T23:26:36.084719638", withNanos},
+		{"2026-11-14 23:26", withSeconds},
+		{"2026-11-14T23:26", withSeconds},
+		{"2026-11-14", midnight},
+	} {
+		got, err := scan[time.Time](t, tc.text)
+		require.NoError(t, err, tc.text)
+		require.True(t, tc.want.Equal(got), "%q: got %v, want %v", tc.text, got, tc.want)
+	}
+
+	got, err := scan[time.Time](t, []byte("2026-11-14 23:26:36.084719638+00:00"))
+	require.NoError(t, err)
+	require.True(t, withNanos.Equal(got))
+
+	zoned := time.Date(2026, 11, 14, 23, 26, 36, 0, time.FixedZone("UTC+3", 3*60*60))
+	got, err = scan[time.Time](t, zoned)
+	require.NoError(t, err)
+	require.Equal(t, zoned, got, "a time from another driver keeps database/sql's path")
+
+	_, err = scan[time.Time](t, nil)
+	require.Error(t, err, "NULL into a plain time is still refused")
+
+	for _, text := range []string{
+		"not a time",
+		"2026-11-14m=garbage",
+		"2026-11-14 m=garbage",
+		"2026-11-14 m=+0.123",
+		"2026-11-14 m=+0.00000000x",
+	} {
+		_, err = scan[time.Time](t, text)
+		require.Error(t, err, "unsupported text is still refused: %q", text)
+	}
+
+	pointer, err := scan[*time.Time](t, "2026-11-14T23:26:36.084719638Z")
+	require.NoError(t, err)
+	require.NotNil(t, pointer)
+	require.True(t, withNanos.Equal(*pointer))
+
+	pointer, err = scan[*time.Time](t, nil)
+	require.NoError(t, err)
+	require.Nil(t, pointer)
+
+	null, err := scan[sql.Null[time.Time]](t, "2026-11-14T23:26:36.084719638Z")
+	require.NoError(t, err)
+	require.True(t, null.Valid)
+	require.True(t, withNanos.Equal(null.V))
+
+	null, err = scan[sql.Null[time.Time]](t, nil)
+	require.NoError(t, err)
+	require.False(t, null.Valid)
+
+	legacy, err := scan[sql.NullTime](t, "2026-11-14T23:26:36.084719638Z")
+	require.NoError(t, err)
+	require.True(t, legacy.Valid)
+	require.True(t, withNanos.Equal(legacy.Time))
+
+	legacyNull, err := scan[sql.Null[sql.NullTime]](t, "2026-11-14T23:26:36.084719638Z")
+	require.NoError(t, err)
+	require.True(t, legacyNull.Valid)
+	require.True(t, legacyNull.V.Valid)
+	require.True(t, withNanos.Equal(legacyNull.V.Time))
+
+	legacyNull, err = scan[sql.Null[sql.NullTime]](t, nil)
+	require.NoError(t, err)
+	require.False(t, legacyNull.Valid)
+
+	deleted, err := scan[DeletedAt](t, "2026-11-14T23:26:36.084719638Z")
+	require.NoError(t, err)
+	require.True(t, deleted.Valid)
+	require.True(t, withNanos.Equal(deleted.V))
+
+	deleted, err = scan[DeletedAt](t, nil)
+	require.NoError(t, err)
+	require.False(t, deleted.Valid)
+
+	deletedNull, err := scan[sql.Null[DeletedAt]](t, "2026-11-14T23:26:36.084719638Z")
+	require.NoError(t, err)
+	require.True(t, deletedNull.Valid)
+	require.True(t, deletedNull.V.Valid)
+	require.True(t, withNanos.Equal(deletedNull.V.V))
+
+	deletedNull, err = scan[sql.Null[DeletedAt]](t, nil)
+	require.NoError(t, err)
+	require.False(t, deletedNull.Valid)
+}
+
 // A net.IP reads from bytes as a bytea held them, and from the text of an inet.
 func TestReadIP(t *testing.T) {
 	got, err := scan[net.IP](t, []byte{10, 0, 0, 1})
@@ -305,7 +408,6 @@ func TestReadNamedBytes(t *testing.T) {
 		reflect.TypeFor[sql.RawBytes](),
 		reflect.TypeFor[scannedBlob](),
 		reflect.TypeFor[string](),
-		reflect.TypeFor[time.Time](),
 		reflect.TypeFor[int64](),
 	} {
 		require.Nil(t, ReaderFor(typ), typ)
