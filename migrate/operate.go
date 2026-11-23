@@ -384,11 +384,13 @@ func (e *engine) drift(
 		return err
 	}
 
+	sequences := serialSequenceChanges(pruned, expected)
+
 	if pending > 0 {
 		e.say("%s", pendingNote(pending))
 	}
 
-	if plan.Empty() {
+	if plan.Empty() && len(sequences) == 0 {
 		e.say("No drift: the database matches %s.", source)
 
 		return nil
@@ -400,11 +402,15 @@ func (e *engine) drift(
 		e.say("  %s", change)
 	}
 
+	for _, change := range sequences {
+		e.say("  %s", change)
+	}
+
 	if slices.ContainsFunc(plan.Changes, defaultMissing) {
 		e.say("\n%s", defaultNote)
 	}
 
-	if showSQL {
+	if showSQL && !plan.Empty() {
 		schema.Backfill(e.d, plan)
 
 		text, err := schema.Script(e.d, plan)
@@ -415,7 +421,42 @@ func (e *engine) drift(
 		e.say("\n%s", text)
 	}
 
-	return fmt.Errorf("%w: %s", ErrDrift, driftNote(len(plan.Changes)))
+	return fmt.Errorf("%w: %s", ErrDrift, driftNote(len(plan.Changes)+len(sequences)))
+}
+
+// serialSequenceChanges reports different explicit serial defaults separately
+// from migration plans, whose identity compatibility leaves them unchanged.
+func serialSequenceChanges(live, expected *schema.Schema) []string {
+	var changes []string
+
+	for _, table := range expected.Tables {
+		current := live.Table(table.Ref())
+		if current == nil {
+			continue
+		}
+
+		for _, column := range table.Columns {
+			other := current.Column(column.Name)
+			if other == nil || !other.Identity || !column.Identity ||
+				!strings.HasPrefix(other.Default, "nextval(") ||
+				!strings.HasPrefix(column.Default, "nextval(") || other.Default == column.Default {
+				continue
+			}
+
+			changes = append(
+				changes,
+				fmt.Sprintf(
+					"change column %s.%s: default %s to %s",
+					table.Ref(),
+					column.Name,
+					other.Default,
+					column.Default,
+				),
+			)
+		}
+	}
+
+	return changes
 }
 
 // reconcile makes live use expected's text wherever the two mean the same, so

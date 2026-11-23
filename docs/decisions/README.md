@@ -261,6 +261,7 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [133](133-a-concurrent-build-clears-its-leftover.md) | A concurrent index build clears its own leftover | active | `Concurrently` `CREATE INDEX CONCURRENTLY` `invalid index` `drift` `Inspect` |
 | [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md) | A column ant made for an earlier default is converted as ant stored it | active | `AlterColumn` `USING` `interval` `inet` `jsonb` `bigint` `bytea` `Type` `upgrade` |
 | [144](144-script-stops-before-a-go-migration.md) | script stops before a Go migration, and starts from a version | active | `script` `Go-migrations` `no-transaction` `from` `guarded` `OutOfOrder` |
+| [158](158-drift-compares-two-explicit-serial-defaults.md) | Drift compares two explicit serial defaults | active | `drift` `identity` `serial` `nextval` `sequence` `postgres` |
 
 #### Performance
 
@@ -346,7 +347,7 @@ Before changing a file, read the decisions about it.
 | `dialect/postgres/ddl_test.go` | [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) |
 | `dialect/postgres/expression.go` | [57](057-drift-compares-what-the-server-stored.md) |
 | `dialect/postgres/functions.go` | [42](042-converters-are-scanner-and-valuer.md) [43](043-database-specific-helpers.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) [145](145-helpers-take-a-field-of-any-type.md) |
-| `dialect/postgres/inspect.go` | [57](057-drift-compares-what-the-server-stored.md) [72](072-partitions-are-not-migrations.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [133](133-a-concurrent-build-clears-its-leftover.md) |
+| `dialect/postgres/inspect.go` | [57](057-drift-compares-what-the-server-stored.md) [72](072-partitions-are-not-migrations.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [133](133-a-concurrent-build-clears-its-leftover.md) [158](158-drift-compares-two-explicit-serial-defaults.md) |
 | `dialect/postgres/partitions.go` | [72](072-partitions-are-not-migrations.md) |
 | `dialect/postgres/pgxext` | [71](071-dependencies-stay-out-of-the-root-package.md) |
 | `dialect/postgres/postgres.go` | [43](043-database-specific-helpers.md) [49](049-postgresql-first.md) |
@@ -402,7 +403,7 @@ Before changing a file, read the decisions about it.
 | `migrate/internal_test.go` | [55](055-renames.md) [56](056-failure.md) |
 | `migrate/migrate_test.go` | [50](050-three-layers-for-migrations.md) [56](056-failure.md) |
 | `migrate/migration.go` | [56](056-failure.md) [58](058-squashing-needs-no-coordination.md) [116](116-code-files-rerun-after-versioned-migrations.md) [126](126-a-migration-runs-as-it-says-or-not-at-all.md) |
-| `migrate/operate.go` | [57](057-drift-compares-what-the-server-stored.md) [59](059-adopting-an-existing-database.md) [73](073-drift-compares-what-models-declare.md) [113](113-a-missing-versions-folder-is-an-error.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md) [144](144-script-stops-before-a-go-migration.md) |
+| `migrate/operate.go` | [57](057-drift-compares-what-the-server-stored.md) [59](059-adopting-an-existing-database.md) [73](073-drift-compares-what-models-declare.md) [113](113-a-missing-versions-folder-is-an-error.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md) [144](144-script-stops-before-a-go-migration.md) [158](158-drift-compares-two-explicit-serial-defaults.md) |
 | `migrate/registry.go` | [56](056-failure.md) |
 | `migrate/source.go` | [11](011-migration-model.md) [60](060-one-program-two-jobs.md) [113](113-a-missing-versions-folder-is-an-error.md) |
 | `options.go` | [29](029-sessions.md) [48](048-replicas.md) [61](061-sessions-take-options.md) [69](069-errors-carry-their-sql.md) [120](120-the-root-does-not-track-and-a-session-does.md) |
@@ -490,6 +491,7 @@ Before changing a file, read the decisions about it.
 | `tests/features/migrations/repeatable_test.go` | [11](011-migration-model.md) [116](116-code-files-rerun-after-versioned-migrations.md) |
 | `tests/features/migrations/reset_test.go` | [126](126-a-migration-runs-as-it-says-or-not-at-all.md) |
 | `tests/features/migrations/script_test.go` | [144](144-script-stops-before-a-go-migration.md) |
+| `tests/features/migrations/sequence_drift_test.go` | [158](158-drift-compares-two-explicit-serial-defaults.md) |
 | `tests/features/migrations/source_test.go` | [11](011-migration-model.md) [60](060-one-program-two-jobs.md) [113](113-a-missing-versions-folder-is-an-error.md) |
 | `tests/features/migrations/squash_test.go` | [58](058-squashing-needs-no-coordination.md) |
 | `tests/features/migrations/team_test.go` | [127](127-commands-refuse-to-guess-which-migration-is-meant.md) |
@@ -625,7 +627,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `diff`: [11](011-migration-model.md) [82](082-a-rename-must-land-on-a-name-the-models-have.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md) [130](130-partitioning-is-part-of-the-table.md)
 - `Discriminator`: [66](066-several-models-can-share-a-table.md) [90](090-merge-keeps-what-other-writes-keep.md)
 - `DoUpdate`: [80](080-every-write-moves-the-version-on.md) [89](089-one-column-one-value.md) [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [103](103-an-upserts-update-stamps-updatedat.md)
-- `drift`: [55](055-renames.md) [57](057-drift-compares-what-the-server-stored.md) [59](059-adopting-an-existing-database.md) [72](072-partitions-are-not-migrations.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [130](130-partitioning-is-part-of-the-table.md) [133](133-a-concurrent-build-clears-its-leftover.md)
+- `drift`: [55](055-renames.md) [57](057-drift-compares-what-the-server-stored.md) [59](059-adopting-an-existing-database.md) [72](072-partitions-are-not-migrations.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) [130](130-partitioning-is-part-of-the-table.md) [133](133-a-concurrent-build-clears-its-leftover.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
 - `Each`: [6](006-return-shapes-and-tracking.md) [27](027-all-returns-t.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md)
 - `embed`: [60](060-one-program-two-jobs.md) [113](113-a-missing-versions-folder-is-an-error.md)
 - `embedded`: [87](087-an-embedded-field-must-be-a-struct-value.md) [125](125-open-refuses-a-model-it-would-misread.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md)
@@ -653,7 +655,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `Gt`: [1](001-ant-ordered-replaces-cmp-ordered.md) [145](145-helpers-take-a-field-of-any-type.md)
 - `history`: [8](008-step-1-file-count.md) [17](017-implemented-ahead-of-the-skeleton.md) [56](056-failure.md) [115](115-a-file-outside-a-transaction-is-recorded-before-it-runs.md)
 - `hooks`: [47](047-hooks-run-inside-the-write.md) [63](063-savechanges-batches-inserts.md) [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md) [154](154-the-ctx-carries-the-transaction.md)
-- `identity`: [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md)
+- `identity`: [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
 - `identity-map`: [27](027-all-returns-t.md) [28](028-identity-and-relation-slices.md) [39](039-global-filters-are-lazy.md) [107](107-hot-paths-allocate-for-the-operation-not-for-each-row.md) [108](108-kept-sql-by-shape-unboxed-keys-compact-snapshots-and.md) [112](112-a-locking-read-puts-the-row-into-the-tracked-instance.md) [148](148-a-query-with-computed-fields-stays-tracked.md)
 - `immutable`: [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md)
 - `In`: [24](024-raw-sql-arguments.md) [95](095-in-means-eq-and-other-value-rules.md) [146](146-ne-matches-null-as-go-does.md)
@@ -680,6 +682,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `naming`: [53](053-names-follow-postgresqls-defaults.md) [67](067-naming-and-conventions-are-global.md) [100](100-probes-are-named-after-their-model-in-the-plural.md) [117](117-the-migrate-program-takes-the-applications-options.md) [132](132-default-names-are-valid-and-distinct.md)
 - `Ne`: [7](007-eq-with-a-nil-pointer.md) [146](146-ne-matches-null-as-go-does.md)
 - `netip`: [125](125-open-refuses-a-model-it-would-misread.md) [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [136](136-an-outer-joins-side-reads-what-only-the-driver-converts.md)
+- `nextval`: [114](114-an-identity-columns-default-is-not-ants-to-change.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
 - `no-transaction`: [115](115-a-file-outside-a-transaction-is-recorded-before-it-runs.md) [126](126-a-migration-runs-as-it-says-or-not-at-all.md) [144](144-script-stops-before-a-go-migration.md)
 - `NotIn`: [95](095-in-means-eq-and-other-value-rules.md) [146](146-ne-matches-null-as-go-does.md)
 - `null`: [30](030-tracking-follows-keys-not-addresses.md) [95](095-in-means-eq-and-other-value-rules.md) [146](146-ne-matches-null-as-go-does.md)
@@ -698,7 +701,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `pg_dump`: [59](059-adopting-an-existing-database.md) [128](128-adopt-leaves-out-roles.md)
 - `pivot`: [44](044-many-to-many.md) [64](064-through-relations-are-read-only-pivots.md)
 - `pointer`: [7](007-eq-with-a-nil-pointer.md) [87](087-an-embedded-field-must-be-a-struct-value.md)
-- `postgres`: [26](026-feature-examples-run-on-postgresql-only.md) [43](043-database-specific-helpers.md) [49](049-postgresql-first.md) [50](050-three-layers-for-migrations.md) [72](072-partitions-are-not-migrations.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md)
+- `postgres`: [26](026-feature-examples-run-on-postgresql-only.md) [43](043-database-specific-helpers.md) [49](049-postgresql-first.md) [50](050-three-layers-for-migrations.md) [72](072-partitions-are-not-migrations.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
 - `primary-key`: [19](019-a-zero-generated-key-means-assign-one.md) [150](150-a-zero-key-nothing-fills-is-refused.md)
 - `probe`: [100](100-probes-are-named-after-their-model-in-the-plural.md) [101](101-probes-are-pinned.md)
 - `probes`: [4](004-conditions-are-not-tied-to-a-model.md) [18](018-wrong-model-detection.md) [21](021-configuration-runs-when-a-context-opens.md) [34](034-self-joins.md) [37](037-references-to-outer-queries.md)
@@ -724,6 +727,8 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `SchemaOf`: [66](066-several-models-can-share-a-table.md) [117](117-the-migrate-program-takes-the-applications-options.md)
 - `secure.Value`: [95](095-in-means-eq-and-other-value-rules.md) [109](109-numbers-inside-an-interface-read-as-json-number.md)
 - `Select`: [5](005-select-closures-run-client-side.md) [9](009-owner-review-of-step-1.md) [136](136-an-outer-joins-side-reads-what-only-the-driver-converts.md)
+- `sequence`: [73](073-drift-compares-what-models-declare.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
+- `serial`: [114](114-an-identity-columns-default-is-not-ants-to-change.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
 - `Session`: [29](029-sessions.md) [61](061-sessions-take-options.md) [120](120-the-root-does-not-track-and-a-session-does.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) [148](148-a-query-with-computed-fields-stays-tracked.md) [153](153-changes-saved-through-another-context-are-reported-by-antvet.md) [154](154-the-ctx-carries-the-transaction.md)
 - `Snapshot`: [11](011-migration-model.md) [28](028-identity-and-relation-slices.md) [57](057-drift-compares-what-the-server-stored.md) [82](082-a-rename-must-land-on-a-name-the-models-have.md) [92](092-tracked-values-compare-as-stored.md) [108](108-kept-sql-by-shape-unboxed-keys-compact-snapshots-and.md)
 - `snapshot`: [123](123-an-after-hooks-edit-is-a-change-to-save.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md)

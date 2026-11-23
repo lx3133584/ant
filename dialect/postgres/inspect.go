@@ -312,7 +312,12 @@ func (d impl) columns(ctx context.Context, q schema.Querier, t *liveTable) error
 		case generated:
 			c.Generated = expr
 		case strings.HasPrefix(expr, "nextval("):
-			// serial and identity columns both mean "the database assigns this".
+			// A serial keeps its expression so diff can compare two explicit
+			// sequences. A true identity leaves its default to the database.
+			if !c.Identity {
+				c.Default = expr
+			}
+
 			c.Identity = true
 		default:
 			c.Default = expr
