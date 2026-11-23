@@ -40,7 +40,17 @@ func reader[T any](rows *sql.Rows, zero func(*meta.Field) bool) (func(*T) error,
 		case utc == nil && read == nil:
 			return func(dst *T) error { return rows.Scan(dst) }, nil
 		case read != nil:
-			return func(dst *T) error { return rows.Scan(read(unsafe.Pointer(dst))) }, nil
+			return func(dst *T) error {
+				if err := rows.Scan(read(unsafe.Pointer(dst))); err != nil {
+					return err
+				}
+
+				if utc != nil {
+					utc(unsafe.Pointer(dst))
+				}
+
+				return nil
+			}, nil
 		}
 
 		return func(dst *T) error {

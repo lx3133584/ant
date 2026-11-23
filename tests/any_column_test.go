@@ -31,11 +31,12 @@ type Ticket struct {
 	Notes     []TicketNote
 	LastNote  *TicketNote
 
-	NoteTotal decimal.Decimal               `ant:"computed"`
-	NoteMost  sql.Null[decimal.Decimal]     `ant:"computed"`
-	NoteAvg   sql.Null[float64]             `ant:"computed"`
-	NoteLast  sql.Null[*time.Time]          `ant:"computed"`
-	NoteFirst sql.Null[sql.Null[time.Time]] `ant:"computed"`
+	NoteTotal  decimal.Decimal               `ant:"computed"`
+	NoteMost   sql.Null[decimal.Decimal]     `ant:"computed"`
+	NoteAvg    sql.Null[float64]             `ant:"computed"`
+	NoteLast   sql.Null[*time.Time]          `ant:"computed"`
+	NoteFirst  sql.Null[sql.Null[time.Time]] `ant:"computed"`
+	NoteLegacy sql.Null[sql.NullTime]        `ant:"computed"`
 }
 
 func (Ticket) Configure(b *ant.ModelBuilder[Ticket]) {
@@ -49,7 +50,9 @@ type TicketNote struct {
 	ID       int64
 	TicketID int64
 	At       *time.Time
+	AtValue  time.Time `ant:"default"`
 	Seen     sql.Null[time.Time]
+	Legacy   sql.NullTime
 	Cost     decimal.Decimal
 }
 
@@ -82,6 +85,13 @@ var (
 		"sqlite":    "REAL",
 		"sqlserver": "FLOAT",
 	}
+	timestampDefaults = map[string]string{
+		"postgres":  "CURRENT_TIMESTAMP",
+		"mysql":     "CURRENT_TIMESTAMP(6)",
+		"mariadb":   "CURRENT_TIMESTAMP(6)",
+		"sqlite":    "CURRENT_TIMESTAMP",
+		"sqlserver": "CURRENT_TIMESTAMP",
+	}
 )
 
 func openTickets(t *testing.T, target testdb.Target) *TicketDB {
@@ -106,9 +116,12 @@ func openTickets(t *testing.T, target testdb.Target) *TicketDB {
 			id BIGINT PRIMARY KEY,
 			ticket_id BIGINT NOT NULL,
 			at %[1]s NULL,
+			at_value %[1]s NOT NULL DEFAULT %[2]s,
 			seen %[1]s NULL,
+			legacy %[1]s NULL,
 			cost NUMERIC(12,2) NOT NULL)`,
 			timestamps[target.Name],
+			timestampDefaults[target.Name],
 		),
 	} {
 		_, err := target.DB.ExecContext(ctx, ddl)
@@ -208,15 +221,26 @@ func TestConformanceHelpersTakeAnyColumn(t *testing.T) {
 				ID:       10,
 				TicketID: 1,
 				At:       &past,
+				AtValue:  past,
+				Seen:     sql.Null[time.Time]{V: past, Valid: true},
+				Legacy:   sql.NullTime{Time: past, Valid: true},
 				Cost:     decimal.RequireFromString("1.10"),
 			},
 			&TicketNote{
 				ID:       11,
 				TicketID: 1,
 				At:       &future,
+				AtValue:  future,
+				Seen:     sql.Null[time.Time]{V: future, Valid: true},
+				Legacy:   sql.NullTime{Time: future, Valid: true},
 				Cost:     decimal.RequireFromString("2.20"),
 			},
-			&TicketNote{ID: 12, TicketID: 2, Cost: decimal.RequireFromString("4.00")},
+			&TicketNote{
+				ID:       12,
+				TicketID: 2,
+				AtValue:  past,
+				Cost:     decimal.RequireFromString("4.00"),
+			},
 		))
 
 		known := db.Tickets.Where(ant.IsNotNull(&Tickets.DueAt))
@@ -434,37 +458,102 @@ func TestConformanceHelpersTakeAnyColumn(t *testing.T) {
 			require.InDelta(t, 1.5, rows[0].Avg, 0.001, "Avg on sql.Null[float64]")
 		})
 
-		// SQLite reads an aggregate of a time column as text, which no time
-		// type scans from, whatever field holds it (#317).
+		// SQLite returns an aggregate of a time column as text, without the
+		// declared type that tells its driver to decode a time (#317).
 		t.Run("time aggregates", func(t *testing.T) {
-			if target.Name == "sqlite" {
-				t.Skip("SQLite reads MAX of a time column as text (#317)")
-			}
-
 			latest, err := ant.MaxOf(ctx, db.Tickets.Query(), &Tickets.DueAt)
 			require.NoError(t, err)
 			require.NotNil(t, latest)
 			require.True(t, future.Equal(*latest), "MaxOf on *time.Time: %v", latest)
 
-			type times struct{ Latest *time.Time }
+			earliest, err := ant.MinOf(ctx, db.Tickets.Query(), &Tickets.DueAt)
+			require.NoError(t, err)
+			require.NotNil(t, earliest)
+			require.True(t, past.Equal(*earliest), "MinOf on *time.Time: %v", earliest)
+
+			latestValue, err := ant.MaxOf(ctx, db.TicketNotes.Query(), &TicketNotes.AtValue)
+			require.NoError(t, err)
+			require.True(t, future.Equal(latestValue), "MaxOf on time.Time: %v", latestValue)
+
+			earliestValue, err := ant.MinOf(ctx, db.TicketNotes.Query(), &TicketNotes.AtValue)
+			require.NoError(t, err)
+			require.True(t, past.Equal(earliestValue), "MinOf on time.Time: %v", earliestValue)
+
+			latestNull, err := ant.MaxOf(ctx, db.TicketNotes.Query(), &TicketNotes.Seen)
+			require.NoError(t, err)
+			require.True(t, latestNull.Valid)
+			require.True(t, future.Equal(latestNull.V), "MaxOf on sql.Null[time.Time]")
+
+			earliestNull, err := ant.MinOf(ctx, db.TicketNotes.Query(), &TicketNotes.Seen)
+			require.NoError(t, err)
+			require.True(t, earliestNull.Valid)
+			require.True(t, past.Equal(earliestNull.V), "MinOf on sql.Null[time.Time]")
+
+			latestLegacy, err := ant.MaxOf(ctx, db.TicketNotes.Query(), &TicketNotes.Legacy)
+			require.NoError(t, err)
+			require.True(t, latestLegacy.Valid)
+			require.True(t, future.Equal(latestLegacy.Time), "MaxOf on sql.NullTime")
+
+			earliestLegacy, err := ant.MinOf(ctx, db.TicketNotes.Query(), &TicketNotes.Legacy)
+			require.NoError(t, err)
+			require.True(t, earliestLegacy.Valid)
+			require.True(t, past.Equal(earliestLegacy.Time), "MinOf on sql.NullTime")
+
+			type times struct {
+				Latest   *time.Time
+				Earliest *time.Time
+			}
 
 			M := ant.Fields[times]()
 			rows, err := ant.Project[times](db.Tickets.Query(),
 				ant.IntoExpr(&M.Latest, ant.Max(&Tickets.DueAt)),
+				ant.IntoExpr(&M.Earliest, ant.Min(&Tickets.DueAt)),
 			).
 				All(ctx)
 			require.NoError(t, err)
 			require.True(t, future.Equal(*rows[0].Latest), "Max on *time.Time")
+			require.True(t, past.Equal(*rows[0].Earliest), "Min on *time.Time")
 
 			got, err := db.Tickets.OrderBy(&Tickets.ID).
 				With(&Tickets.NoteLast, ant.MaxRelated(&Tickets.Notes, &TicketNotes.At)).
 				With(&Tickets.NoteFirst, ant.MinRelated(&Tickets.Notes, &TicketNotes.Seen)).
+				With(&Tickets.NoteLegacy, ant.MinRelated(&Tickets.Notes, &TicketNotes.Legacy)).
 				All(ctx)
 			require.NoError(t, err)
 			require.True(t, got[0].NoteLast.Valid)
 			require.True(t, future.Equal(*got[0].NoteLast.V), "MaxRelated on *time.Time")
-			require.False(t, got[0].NoteFirst.Valid, "MinRelated of NULLs on sql.Null[time.Time]")
+			require.True(t, got[0].NoteFirst.Valid)
+			require.True(t, got[0].NoteFirst.V.Valid)
+			require.True(t, past.Equal(got[0].NoteFirst.V.V), "MinRelated on sql.Null[time.Time]")
+			require.True(t, got[0].NoteLegacy.Valid)
+			require.True(t, got[0].NoteLegacy.V.Valid)
+			require.True(t, past.Equal(got[0].NoteLegacy.V.Time), "MinRelated on sql.NullTime")
 			require.False(t, got[2].NoteLast.Valid)
+
+			deleted := ant.DeletedAt{Null: sql.Null[time.Time]{V: past, Valid: true}}
+			require.NoError(t, db.Tickets.Insert(ctx, &Ticket{
+				ID:        4,
+				Ref:       uuid.MustParse("00000000-0000-0000-0000-000000000004"),
+				Amount:    decimal.RequireFromString("1.00"),
+				DeletedAt: deleted,
+			}))
+
+			defer func() {
+				_, _ = target.DB.ExecContext(
+					context.Background(),
+					"DELETE FROM tickets WHERE id = 4",
+				)
+			}()
+
+			latestDeleted, err := ant.MaxOf(ctx, db.Tickets.WithDeleted(), &Tickets.DeletedAt)
+			require.NoError(t, err)
+			require.True(t, latestDeleted.Valid)
+			require.True(t, past.Equal(latestDeleted.V), "MaxOf on ant.DeletedAt")
+
+			earliestDeleted, err := ant.MinOf(ctx, db.Tickets.WithDeleted(), &Tickets.DeletedAt)
+			require.NoError(t, err)
+			require.True(t, earliestDeleted.Valid)
+			require.True(t, past.Equal(earliestDeleted.V), "MinOf on ant.DeletedAt")
 		})
 
 		t.Run("related", func(t *testing.T) {

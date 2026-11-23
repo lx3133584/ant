@@ -36,6 +36,8 @@ func (f *Field) DriverOnly() bool { return f.driverOnly }
 // pointer is read through, or nil when database/sql's own conversion is right
 // for t. These are the types database/sql cannot fill from what a driver gives:
 //
+//   - time.Time and its nullable forms, from the text SQLite returns for an
+//     aggregate of a time column, as well as from a driver's time.Time;
 //   - time.Duration, *time.Duration and sql.Null[time.Duration], from the text of
 //     a PostgreSQL interval, as well as from a count of nanoseconds;
 //   - net.IP, *net.IP and sql.Null[net.IP], from the text of an inet or cidr, as
@@ -64,6 +66,33 @@ func ReaderFor(t reflect.Type) func(unsafe.Pointer) any {
 }
 
 var readers = map[reflect.Type]func(unsafe.Pointer) any{
+	reflect.TypeFor[time.Time](): func(p unsafe.Pointer) any {
+		return (*timeDest)(p)
+	},
+	reflect.TypeFor[*time.Time](): func(p unsafe.Pointer) any {
+		return (*timePointerDest)(p)
+	},
+	reflect.TypeFor[sql.Null[time.Time]](): func(p unsafe.Pointer) any {
+		return (*timeNullDest)(p)
+	},
+	reflect.TypeFor[sql.Null[*time.Time]](): func(p unsafe.Pointer) any {
+		return (*timeNullPointerDest)(p)
+	},
+	reflect.TypeFor[sql.Null[sql.Null[time.Time]]](): func(p unsafe.Pointer) any {
+		return (*timeNullNullDest)(p)
+	},
+	reflect.TypeFor[sql.NullTime](): func(p unsafe.Pointer) any {
+		return (*nullTimeDest)(p)
+	},
+	reflect.TypeFor[sql.Null[sql.NullTime]](): func(p unsafe.Pointer) any {
+		return (*nullTimeNullDest)(p)
+	},
+	reflect.TypeFor[DeletedAt](): func(p unsafe.Pointer) any {
+		return (*deletedAtDest)(p)
+	},
+	reflect.TypeFor[sql.Null[DeletedAt]](): func(p unsafe.Pointer) any {
+		return (*deletedAtNullDest)(p)
+	},
 	reflect.TypeFor[time.Duration](): func(p unsafe.Pointer) any {
 		return (*durationDest)(p)
 	},
@@ -121,6 +150,208 @@ func textOf(src any) (string, bool) {
 	}
 
 	return "", false
+}
+
+// SQLite's driver accepts these layouts for a column declared as a time. An
+// aggregate has no declared type, so the same text reaches ant as a string.
+// The first is time.Time.String, the driver's default when it binds a time.
+var timeTextFormats = []string{
+	"2006-01-02 15:04:05.999999999 -0700 MST",
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02T15:04:05.999999999-07:00",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04",
+	"2006-01-02T15:04",
+	"2006-01-02",
+}
+
+// trimTimeMonotonic removes only a terminal monotonic reading in the exact
+// form time.Time.String emits: " m=" then a sign and seconds with nine
+// fractional digits. Any other m= text stays untouched and is rejected below.
+func trimTimeMonotonic(text string) string {
+	i := strings.LastIndex(text, " m=")
+	if i < 0 {
+		return text
+	}
+
+	suffix := text[i+3:]
+
+	dot := strings.IndexByte(suffix, '.')
+	if len(suffix) < 2 || (suffix[0] != '+' && suffix[0] != '-') ||
+		dot < 2 || len(suffix)-dot-1 != 9 {
+		return text
+	}
+
+	for j := 1; j < len(suffix); j++ {
+		if j == dot {
+			continue
+		}
+
+		if suffix[j] < '0' || suffix[j] > '9' {
+			return text
+		}
+	}
+
+	return text[:i]
+}
+
+// parseTimeText reads the text SQLite gives an aggregate. A non-text source,
+// or text that matches none of the driver's layouts, is left to database/sql.
+func parseTimeText(src any) (time.Time, bool) {
+	text, ok := textOf(src)
+	if !ok {
+		return time.Time{}, false
+	}
+
+	text = trimTimeMonotonic(text)
+	text = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), "Z"))
+
+	for _, layout := range timeTextFormats {
+		value, err := time.Parse(layout, text)
+		if err == nil {
+			return value.UTC(), true
+		}
+	}
+
+	return time.Time{}, false
+}
+
+// timeDest reads a time.Time without adding an allocation to database/sql's
+// usual time.Time path; only text parsing needs ant's scanner.
+type timeDest time.Time
+
+// Scan implements sql.Scanner.
+func (d *timeDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		*d = timeDest(value)
+
+		return nil
+	}
+
+	return convert((*time.Time)(d), src)
+}
+
+type timePointerDest struct{ v *time.Time }
+
+// Scan implements sql.Scanner.
+func (d *timePointerDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.v = new(time.Time)
+		*d.v = value
+
+		return nil
+	}
+
+	return convert((**time.Time)(unsafe.Pointer(d)), src)
+}
+
+type timeNullDest sql.Null[time.Time]
+
+// Scan implements sql.Scanner.
+func (d *timeNullDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.V = value
+		d.Valid = true
+
+		return nil
+	}
+
+	return convert((*sql.Null[time.Time])(d), src)
+}
+
+// timeNullPointerDest is the wrapper a related aggregate uses around a
+// *time.Time field.
+type timeNullPointerDest sql.Null[*time.Time]
+
+// Scan implements sql.Scanner.
+func (d *timeNullPointerDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.V = new(time.Time)
+		*d.V = value
+		d.Valid = true
+
+		return nil
+	}
+
+	return convert((*sql.Null[*time.Time])(d), src)
+}
+
+// timeNullNullDest is the wrapper a related aggregate uses around an
+// sql.Null[time.Time] field.
+type timeNullNullDest sql.Null[sql.Null[time.Time]]
+
+// Scan implements sql.Scanner.
+func (d *timeNullNullDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.V.V = value
+		d.V.Valid = true
+		d.Valid = true
+
+		return nil
+	}
+
+	return convert((*sql.Null[sql.Null[time.Time]])(d), src)
+}
+
+type nullTimeDest sql.NullTime
+
+// Scan implements sql.Scanner.
+func (d *nullTimeDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.Time = value
+		d.Valid = true
+
+		return nil
+	}
+
+	return convert((*sql.NullTime)(d), src)
+}
+
+// nullTimeNullDest is the scalar aggregate's nullable wrapper for NullTime.
+type nullTimeNullDest sql.Null[sql.NullTime]
+
+// Scan implements sql.Scanner.
+func (d *nullTimeNullDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.V.Time = value
+		d.V.Valid = true
+		d.Valid = true
+
+		return nil
+	}
+
+	return convert((*sql.Null[sql.NullTime])(d), src)
+}
+
+type deletedAtDest DeletedAt
+
+// Scan implements sql.Scanner.
+func (d *deletedAtDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.V = value
+		d.Valid = true
+
+		return nil
+	}
+
+	return convert((*DeletedAt)(d), src)
+}
+
+// deletedAtNullDest is the scalar aggregate's nullable wrapper for DeletedAt.
+type deletedAtNullDest sql.Null[DeletedAt]
+
+// Scan implements sql.Scanner.
+func (d *deletedAtNullDest) Scan(src any) error {
+	if value, ok := parseTimeText(src); ok {
+		d.V.V = value
+		d.V.Valid = true
+		d.Valid = true
+
+		return nil
+	}
+
+	return convert((*sql.Null[DeletedAt])(d), src)
 }
 
 // durationDest reads a time.Duration. A whole number is nanoseconds, as ant
