@@ -1542,6 +1542,7 @@ func loadProbes() []probe {
 type probe struct {
 	ptr   unsafe.Pointer
 	base  uintptr
+	end   uintptr // base plus the model's size, computed once at registration
 	model *Model
 }
 
@@ -1567,7 +1568,12 @@ func Probe[T any]() *T {
 	p := new(T)
 	pinner.Pin(p)
 
-	next := insertProbe(current, probe{unsafe.Pointer(p), uintptr(unsafe.Pointer(p)), model})
+	next := insertProbe(current, probe{
+		ptr:   unsafe.Pointer(p),
+		base:  uintptr(unsafe.Pointer(p)),
+		end:   uintptr(unsafe.Pointer(p)) + model.Type.Size(),
+		model: model,
+	})
 	probes.Store(&next)
 
 	return p
@@ -1615,14 +1621,37 @@ func Resolve[V any](ptr *V) (Ref, bool) {
 	list := loadProbes()
 
 	// Probes are sorted by base and do not overlap, so at most one holds addr:
-	// the last whose base is at or below it.
-	at := sort.Search(len(list), func(i int) bool { return list[i].base > addr }) - 1
+	// the last whose base is at or below it. A plain loop over the bounds beats
+	// sort.Search's comparator closure here, which cannot inline and runs for
+	// every condition of every query.
+	at := -1
+
+	if len(list) <= 8 {
+		for i, q := range list {
+			if addr >= q.base {
+				at = i
+			}
+		}
+	} else {
+		lo, hi := 0, len(list)
+		for lo < hi {
+			mid := lo + (hi-lo)/2
+			if list[mid].base > addr {
+				hi = mid
+			} else {
+				lo = mid + 1
+			}
+		}
+
+		at = lo - 1
+	}
+
 	if at < 0 {
 		return Ref{}, false
 	}
 
 	p := list[at]
-	if addr >= p.base+p.model.Type.Size() {
+	if addr >= p.end {
 		return Ref{}, false
 	}
 

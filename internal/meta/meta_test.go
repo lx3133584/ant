@@ -714,25 +714,28 @@ func TestProbesDoNotOverlap(t *testing.T) {
 
 	probes := loadProbes()
 	for i, a := range probes {
-		aEnd := a.base + a.model.Type.Size()
+		// The cached end a lookup checks against must match the range the model
+		// occupies, or a probe could hold an address it does not own.
+		if want := a.base + a.model.Type.Size(); a.end != want {
+			t.Errorf("probe %d (%s) end %#x, want %#x", i, a.model.Type, a.end, want)
+		}
 
 		for j, b := range probes {
 			if i == j {
 				continue
 			}
 
-			bEnd := b.base + b.model.Type.Size()
-			if a.base < bEnd && b.base < aEnd {
+			if a.base < b.end && b.base < a.end {
 				t.Errorf(
 					"probes %d (%s, %#x+%#x) and %d (%s, %#x+%#x) overlap",
 					i,
 					a.model.Type,
 					a.base,
-					a.model.Type.Size(),
+					a.end-a.base,
 					j,
 					b.model.Type,
 					b.base,
-					b.model.Type.Size(),
+					b.end-b.base,
 				)
 			}
 		}
