@@ -270,6 +270,7 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md) | A column ant made for an earlier default is converted as ant stored it | active | `AlterColumn` `USING` `interval` `inet` `jsonb` `bigint` `bytea` `Type` `upgrade` |
 | [144](144-script-stops-before-a-go-migration.md) | script stops before a Go migration, and starts from a version | active | `script` `Go-migrations` `no-transaction` `from` `guarded` `OutOfOrder` |
 | [158](158-drift-compares-two-explicit-serial-defaults.md) | Drift compares two explicit serial defaults | active | `drift` `identity` `serial` `nextval` `sequence` `postgres` |
+| [161](161-a-month-is-read-from-its-bounds.md) | A month of a partitioned table is read from its bounds, not its name | active | `partitions` `MonthlyPartitions` `DropBefore` `Ensure` `List` `postgres` `bounds` |
 
 #### Performance
 
@@ -356,7 +357,7 @@ Before changing a file, read the decisions about it.
 | `dialect/postgres/expression.go` | [57](057-drift-compares-what-the-server-stored.md) |
 | `dialect/postgres/functions.go` | [42](042-converters-are-scanner-and-valuer.md) [43](043-database-specific-helpers.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) [145](145-helpers-take-a-field-of-any-type.md) |
 | `dialect/postgres/inspect.go` | [57](057-drift-compares-what-the-server-stored.md) [72](072-partitions-are-not-migrations.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [133](133-a-concurrent-build-clears-its-leftover.md) [158](158-drift-compares-two-explicit-serial-defaults.md) |
-| `dialect/postgres/partitions.go` | [72](072-partitions-are-not-migrations.md) |
+| `dialect/postgres/partitions.go` | [72](072-partitions-are-not-migrations.md) [161](161-a-month-is-read-from-its-bounds.md) |
 | `dialect/postgres/pgxext` | [71](071-dependencies-stay-out-of-the-root-package.md) |
 | `dialect/postgres/postgres.go` | [43](043-database-specific-helpers.md) [49](049-postgresql-first.md) |
 | `dialect/postgres/session.go` | [56](056-failure.md) |
@@ -493,7 +494,7 @@ Before changing a file, read the decisions about it.
 | `tests/features/migrations/diff_test.go` | [11](011-migration-model.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) |
 | `tests/features/migrations/drift_test.go` | [57](057-drift-compares-what-the-server-stored.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [119](119-an-upserts-update-writes-the-zero-a-default-field-holds.md) |
 | `tests/features/migrations/generated_test.go` | [78](078-a-replaced-column-takes-its-dependents-along-and-they.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) |
-| `tests/features/migrations/modeling_test.go` | [51](051-modeling-added-for-migrations.md) [72](072-partitions-are-not-migrations.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [130](130-partitioning-is-part-of-the-table.md) [132](132-default-names-are-valid-and-distinct.md) |
+| `tests/features/migrations/modeling_test.go` | [51](051-modeling-added-for-migrations.md) [72](072-partitions-are-not-migrations.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [130](130-partitioning-is-part-of-the-table.md) [132](132-default-names-are-valid-and-distinct.md) [161](161-a-month-is-read-from-its-bounds.md) |
 | `tests/features/migrations/models_test.go` | [51](051-modeling-added-for-migrations.md) |
 | `tests/features/migrations/native_types_test.go` | [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md) |
 | `tests/features/migrations/relations_test.go` | [54](054-foreign-keys.md) [131](131-a-foreign-key-column-follows-its-target.md) |
@@ -701,6 +702,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `migrate`: [11](011-migration-model.md) [50](050-three-layers-for-migrations.md) [60](060-one-program-two-jobs.md) [113](113-a-missing-versions-folder-is-an-error.md)
 - `migrate-up`: [115](115-a-file-outside-a-transaction-is-recorded-before-it-runs.md) [116](116-code-files-rerun-after-versioned-migrations.md)
 - `migrations`: [49](049-postgresql-first.md) [58](058-squashing-needs-no-coordination.md) [82](082-a-rename-must-land-on-a-name-the-models-have.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md)
+- `MonthlyPartitions`: [72](072-partitions-are-not-migrations.md) [161](161-a-month-is-read-from-its-bounds.md)
 - `Morph`: [65](065-scoped-relations-use-the-same-filter-path.md) [163](163-includejoined-applies-the-relations-own-conditions.md)
 - `mysql`: [13](013-mariadb-shares-the-mysql-package.md) [75](075-generated-values-without-returning.md) [85](085-mysql-reads-the-table-it-writes-through-a-derived-table.md) [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [122](122-what-the-database-fills-is-read-back-by-key.md) [164](164-explain-reads-each-databases-plan-statement.md)
 - `naming`: [53](053-names-follow-postgresqls-defaults.md) [67](067-naming-and-conventions-are-global.md) [100](100-probes-are-named-after-their-model-in-the-plural.md) [117](117-the-migrate-program-takes-the-applications-options.md) [132](132-default-names-are-valid-and-distinct.md)
@@ -722,11 +724,11 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `orphan`: [30](030-tracking-follows-keys-not-addresses.md) [149](149-a-has-one-pointer-is-the-truth-about-its-row.md)
 - `otel`: [46](046-interceptors.md) [97](097-spans-name-the-database-the-dialect-talks-to.md)
 - `Page`: [81](081-a-set-operations-members-keep-their-own-paging.md) [143](143-paging-arguments-out-of-range-are-errpaging.md)
-- `partitions`: [72](072-partitions-are-not-migrations.md) [130](130-partitioning-is-part-of-the-table.md)
+- `partitions`: [72](072-partitions-are-not-migrations.md) [130](130-partitioning-is-part-of-the-table.md) [161](161-a-month-is-read-from-its-bounds.md)
 - `pg_dump`: [59](059-adopting-an-existing-database.md) [128](128-adopt-leaves-out-roles.md)
 - `pivot`: [44](044-many-to-many.md) [64](064-through-relations-are-read-only-pivots.md)
 - `pointer`: [7](007-eq-with-a-nil-pointer.md) [87](087-an-embedded-field-must-be-a-struct-value.md)
-- `postgres`: [26](026-feature-examples-run-on-postgresql-only.md) [43](043-database-specific-helpers.md) [49](049-postgresql-first.md) [50](050-three-layers-for-migrations.md) [72](072-partitions-are-not-migrations.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) [158](158-drift-compares-two-explicit-serial-defaults.md)
+- `postgres`: [26](026-feature-examples-run-on-postgresql-only.md) [43](043-database-specific-helpers.md) [49](049-postgresql-first.md) [50](050-three-layers-for-migrations.md) [72](072-partitions-are-not-migrations.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) [158](158-drift-compares-two-explicit-serial-defaults.md) [161](161-a-month-is-read-from-its-bounds.md)
 - `primary-key`: [19](019-a-zero-generated-key-means-assign-one.md) [150](150-a-zero-key-nothing-fills-is-refused.md)
 - `probe`: [100](100-probes-are-named-after-their-model-in-the-plural.md) [101](101-probes-are-pinned.md)
 - `probes`: [4](004-conditions-are-not-tied-to-a-model.md) [18](018-wrong-model-detection.md) [21](021-configuration-runs-when-a-context-opens.md) [34](034-self-joins.md) [37](037-references-to-outer-queries.md)
