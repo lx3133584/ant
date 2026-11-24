@@ -1620,16 +1620,19 @@ func Resolve[V any](ptr *V) (Ref, bool) {
 
 	list := loadProbes()
 
-	// Probes are sorted by base and do not overlap, so at most one holds addr:
-	// the last whose base is at or below it. A plain loop over the bounds beats
-	// sort.Search's comparator closure here, which cannot inline and runs for
-	// every condition of every query.
+	// Probes are sorted by base and do not overlap, so at most one holds addr.
+	// A plain loop over the bounds beats sort.Search's comparator closure here,
+	// which cannot inline and runs for every condition of every query.
 	at := -1
 
 	if len(list) <= 8 {
+		// Ranges are disjoint, so the one holding addr is the only match and the
+		// scan can stop there rather than walk the list to its end.
 		for i, q := range list {
-			if addr >= q.base {
+			if addr >= q.base && addr < q.end {
 				at = i
+
+				break
 			}
 		}
 	} else {
