@@ -4,8 +4,14 @@
 //		ant.GenerateKey(b, &Orders.ID, ids.UUID)
 //	}
 //
-// UUID and ULID sort by creation time, unlike a random UUID, so new rows land at
-// the end of an index instead of scattering across it.
+// UUID, UUIDv7 and ULID sort by creation time, unlike a random UUID, so new rows
+// land at the end of an index instead of scattering across it.
+//
+// UUID fills a string key, which is a text column. For a native uuid column, give
+// the key a 16-byte type such as github.com/google/uuid's, and fill it with
+// UUIDv7:
+//
+//	ant.GenerateKey(b, &Orders.ID, ids.UUIDv7[uuid.UUID])
 package ids
 
 import (
@@ -17,13 +23,10 @@ import (
 )
 
 // UUID returns a version 7 UUID in its usual text form: a millisecond timestamp
-// followed by random bits, so values sort by time.
+// followed by random bits, so values sort by time. It is UUIDv7 as text, for a
+// string key.
 func UUID() string {
-	var b [16]byte
-	fillTime(b[:6])
-	rand.Read(b[6:])
-	b[6] = b[6]&0x0f | 0x70
-	b[8] = b[8]&0x3f | 0x80
+	b := UUIDv7[[16]byte]()
 
 	var out [36]byte
 	hex.Encode(out[0:8], b[0:4])
@@ -37,6 +40,22 @@ func UUID() string {
 	hex.Encode(out[24:36], b[10:16])
 
 	return string(out[:])
+}
+
+// UUIDv7 returns a version 7 UUID as any 16-byte type: a millisecond timestamp
+// followed by random bits, so values sort by time. With a UUID type such as
+// github.com/google/uuid's, the key is a native uuid column, where UUID's string
+// is a text one:
+//
+//	ant.GenerateKey(b, &Orders.ID, ids.UUIDv7[uuid.UUID])
+func UUIDv7[T ~[16]byte]() T {
+	var b [16]byte
+	fillTime(b[:6])
+	rand.Read(b[6:])
+	b[6] = b[6]&0x0f | 0x70
+	b[8] = b[8]&0x3f | 0x80
+
+	return T(b)
 }
 
 func fillTime(b []byte) {
