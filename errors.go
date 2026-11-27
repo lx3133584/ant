@@ -152,6 +152,8 @@ func (e *ConcurrencyError) Error() string {
 func (e *ConcurrencyError) Unwrap() error { return ErrConcurrency }
 
 // ValidationError reports a field that failed a rule from ModelBuilder.Validate.
+// A write that fails several fields returns one for each, joined: errors.As
+// reaches the first, and the joined error's Unwrap() []error reaches them all.
 type ValidationError struct {
 	Model string
 	Field string
