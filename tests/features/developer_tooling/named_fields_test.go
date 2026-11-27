@@ -66,6 +66,13 @@ func TestWrongModelNamesTheField(t *testing.T) {
 			require.ErrorContains(t, err, "Post.Title in a query of User")
 		})
 
+		t.Run("a computed column of another model", func(t *testing.T) {
+			//antvet:ignore another model's field, on purpose: the test checks the error
+			_, err := db.Users.With(&Posts.Title, ant.SQL[string]("'x'")).All(ctx)
+			require.ErrorIs(t, err, ant.ErrWrongModel)
+			require.ErrorContains(t, err, "Post.Title in a query of User")
+		})
+
 		t.Run("a condition among others", func(t *testing.T) {
 			_, err := db.Users.Where(
 				ant.Eq(&Users.Name, "x"),

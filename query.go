@@ -482,6 +482,12 @@ func (q *Query[T]) chosen(m *meta.Model) string {
 	}
 
 	for _, c := range q.computed {
+		// The field With fills is kept by its column alone. It is m's when m
+		// maps a field to that column and no model the query reads from does.
+		if f := m.Column(c.Alias); f != nil && !q.maps(c.Alias) {
+			return f.Name
+		}
+
 		if name := fieldRead(c.Value, m); name != "" {
 			return name
 		}
@@ -500,6 +506,13 @@ func (q *Query[T]) chosen(m *meta.Model) string {
 	}
 
 	return ""
+}
+
+// maps reports whether a model the query reads from maps a field to column.
+func (q *Query[T]) maps(column string) bool {
+	return slices.ContainsFunc(q.sources, func(s source) bool {
+		return s.model != nil && s.model.Column(column) != nil
+	})
 }
 
 func (q *Query[T]) readyToRead() error {
