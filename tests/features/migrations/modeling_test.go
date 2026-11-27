@@ -253,6 +253,52 @@ type PartitionDB struct {
 	Readings ant.Table[Reading]
 }
 
+// Stamp is a row in a table partitioned by month on a timestamp without time
+// zone, whose bounds PostgreSQL prints without a zone.
+type Stamp struct {
+	ID int64
+	At time.Time
+}
+
+func (Stamp) Configure(b *ant.ModelBuilder[Stamp]) {
+	b.Key(&Stamps.ID).NotGenerated()
+	b.CompositeKey(ant.F(&Stamps.ID), ant.F(&Stamps.At))
+	b.Column(&Stamps.At).Type("timestamp")
+	b.PartitionByRange(ant.F(&Stamps.At))
+}
+
+// Stamps is Stamp's probe.
+var Stamps = ant.Fields[Stamp]()
+
+// StampDB holds it.
+type StampDB struct {
+	ant.Context
+	Stamps ant.Table[Stamp]
+}
+
+// Day is a row in a table partitioned by month on a date column, whose bounds
+// PostgreSQL prints as a plain date.
+type Day struct {
+	ID int64
+	At time.Time
+}
+
+func (Day) Configure(b *ant.ModelBuilder[Day]) {
+	b.Key(&Days.ID).NotGenerated()
+	b.CompositeKey(ant.F(&Days.ID), ant.F(&Days.At))
+	b.Column(&Days.At).Type("date")
+	b.PartitionByRange(ant.F(&Days.At))
+}
+
+// Days is Day's probe.
+var Days = ant.Fields[Day]()
+
+// DayDB holds it.
+type DayDB struct {
+	ant.Context
+	Days ant.Table[Day]
+}
+
 // Migrations create the partitioned parent, and postgres.Partitions keeps its
 // months, which is routine work rather than a schema change.
 func TestPartitions(t *testing.T) {
@@ -305,6 +351,174 @@ func TestPartitions(t *testing.T) {
 			require.Len(t, left, 2)
 			require.Equal(t, 1, scalar[int](p, "SELECT count(*) FROM readings"))
 		})
+	})
+}
+
+// A month of a partitioned table need not be named table_YYYY_MM. A DBA may
+// have made it before ant managed the table, and Pagila's are payment_p2022_01.
+// What makes a partition a month is its bounds, so List, Ensure and DropBefore
+// go by those, not by the name (#196).
+func TestPartitionsNamedBySomethingElse(t *testing.T) {
+	each(t, func(t *testing.T, p *project) {
+		ctx := t.Context()
+
+		must[PartitionDB](p, "diff", "start")
+		must[PartitionDB](p, "up")
+
+		db := open[PartitionDB](p)
+		months, err := postgres.MonthlyPartitions[Reading](db)
+		require.NoError(t, err)
+
+		p.sql(`CREATE TABLE readings_apr26 PARTITION OF readings
+			FOR VALUES FROM ('2026-04-01') TO ('2026-05-01')`)
+
+		t.Run("List reads the month from the bounds", func(t *testing.T) {
+			got, err := months.List(ctx)
+			require.NoError(t, err)
+			require.Len(t, got, 1)
+			require.Equal(t, "readings_apr26", got[0].Name)
+			require.Equal(t, time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), got[0].Month)
+		})
+
+		t.Run("Ensure sees the month is taken", func(t *testing.T) {
+			created, err := months.Ensure(ctx, time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC), 0)
+			require.NoError(t, err)
+			require.Empty(t, created)
+		})
+
+		t.Run("DropBefore reaches it", func(t *testing.T) {
+			dropped, err := months.DropBefore(ctx, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
+			require.NoError(t, err)
+			require.Equal(t, []string{"readings_apr26"}, dropped)
+		})
+	})
+}
+
+// A table partitioned on a timestamp without time zone prints its months'
+// bounds without a zone, as '2026-04-01 00:00:00'. Such a table's months are
+// months too: List reads them, and Ensure and DropBefore act on them (#196).
+func TestPartitionsOnATimestampWithoutZone(t *testing.T) {
+	each(t, func(t *testing.T, p *project) {
+		ctx := t.Context()
+
+		must[StampDB](p, "diff", "start")
+		must[StampDB](p, "up")
+
+		db := open[StampDB](p)
+		months, err := postgres.MonthlyPartitions[Stamp](db)
+		require.NoError(t, err)
+
+		p.sql(`CREATE TABLE stamps_apr26 PARTITION OF stamps
+			FOR VALUES FROM ('2026-04-01') TO ('2026-05-01')`)
+
+		got, err := months.List(ctx)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		require.Equal(t, "stamps_apr26", got[0].Name)
+		require.Equal(t, time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), got[0].Month)
+
+		created, err := months.Ensure(ctx, time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC), 0)
+		require.NoError(t, err)
+		require.Empty(t, created)
+
+		dropped, err := months.DropBefore(ctx, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
+		require.NoError(t, err)
+		require.Equal(t, []string{"stamps_apr26"}, dropped)
+	})
+}
+
+// A table partitioned on a date prints its months' bounds as a plain date, as
+// '2026-04-01', and those months are months too (#196).
+func TestPartitionsOnADate(t *testing.T) {
+	each(t, func(t *testing.T, p *project) {
+		ctx := t.Context()
+
+		must[DayDB](p, "diff", "start")
+		must[DayDB](p, "up")
+
+		db := open[DayDB](p)
+		months, err := postgres.MonthlyPartitions[Day](db)
+		require.NoError(t, err)
+
+		p.sql(`CREATE TABLE days_apr26 PARTITION OF days
+			FOR VALUES FROM ('2026-04-01') TO ('2026-05-01')`)
+
+		got, err := months.List(ctx)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		require.Equal(t, "days_apr26", got[0].Name)
+		require.Equal(t, time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC), got[0].Month)
+
+		dropped, err := months.DropBefore(ctx, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC))
+		require.NoError(t, err)
+		require.Equal(t, []string{"days_apr26"}, dropped)
+
+		// A date column takes the zone the CREATE names, and the bounds it
+		// prints afterward read back as the same month.
+		created, err := months.Ensure(ctx, time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC), 0)
+		require.NoError(t, err)
+		require.Equal(t, []string{"days_2026_06"}, created)
+
+		got, err = months.List(ctx)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		require.Equal(t, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), got[0].Month)
+	})
+}
+
+// A partition whose bounds are not a whole month is not a month of the table,
+// so List leaves it alone and DropBefore does not remove it.
+func TestPartitionsOfOtherSpansAreLeftAlone(t *testing.T) {
+	each(t, func(t *testing.T, p *project) {
+		ctx := t.Context()
+
+		must[PartitionDB](p, "diff", "start")
+		must[PartitionDB](p, "up")
+
+		db := open[PartitionDB](p)
+		months, err := postgres.MonthlyPartitions[Reading](db)
+		require.NoError(t, err)
+
+		p.sql(`CREATE TABLE readings_half PARTITION OF readings
+			FOR VALUES FROM ('2026-06-01') TO ('2026-06-16')`)
+
+		got, err := months.List(ctx)
+		require.NoError(t, err)
+		require.Empty(t, got)
+
+		dropped, err := months.DropBefore(ctx, time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC))
+		require.NoError(t, err)
+		require.Empty(t, dropped)
+	})
+}
+
+// A partition named what Ensure would name a month, but spanning something
+// else, cannot be replaced: CREATE TABLE IF NOT EXISTS would skip it. Ensure
+// says so rather than reporting a month created that is not there.
+func TestPartitionsRefuseANameTakenByAnotherSpan(t *testing.T) {
+	each(t, func(t *testing.T, p *project) {
+		ctx := t.Context()
+
+		must[PartitionDB](p, "diff", "start")
+		must[PartitionDB](p, "up")
+
+		db := open[PartitionDB](p)
+		months, err := postgres.MonthlyPartitions[Reading](db)
+		require.NoError(t, err)
+
+		p.sql(`CREATE TABLE readings_2026_04 PARTITION OF readings
+			FOR VALUES FROM ('2026-04-01') TO ('2026-04-16')`)
+
+		_, err = months.Ensure(ctx, time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC), 0)
+		require.ErrorContains(
+			t,
+			err,
+			"readings_2026_04 is taken by a partition that is not the month of 2026-04",
+		)
+
+		got, err := months.List(ctx)
+		require.NoError(t, err)
+		require.Empty(t, got)
 	})
 }
 
