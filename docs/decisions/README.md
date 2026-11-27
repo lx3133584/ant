@@ -87,6 +87,7 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [150](150-a-zero-key-nothing-fills-is-refused.md) | A zero key that nothing fills is refused | active | `primary-key` `uuid` `zero-value` `GenerateKey` `default` `ErrZeroKey` |
 | [151](151-deletedat-is-a-time-or-null-in-json.md) | DeletedAt is a time or null in JSON | active | `DeletedAt` `soft-delete` `JSON` `MarshalJSON` |
 | [152](152-open-refuses-values-the-driver-cannot-take.md) | Open refuses values the driver can't take | active | `Open` `ErrNoColumnType` `driver` `slice` `map` `struct` `PlainValues` `Table` |
+| [176](176-ants-structs-have-camelcase-json-keys.md) | ant's structs have camelCase JSON keys | active | `json` `Base` `Page` `CursorPage` `Point` `Partition` `metrics` `breaking` |
 
 #### Values and types
 
@@ -310,8 +311,9 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [62](062-the-statement-ast-is-public.md) | The statement AST is public | active | `qb` `AST` `Dialect` `public-package` `stability` |
 | [71](071-dependencies-stay-out-of-the-root-package.md) | Dependencies stay out of the root package | active | `dependencies` `pgxext` `ErrInTx` `contrib/otel` `antvet` `Copy` `Batch` |
 | [77](077-layout-is-enforced-by-tools.md) | Layout is enforced by tools | active | `make-fmt` `golines` `wsl_v5` `nlreturn` `antfmt` `lint` `layout` |
-| [83](083-antvet-judges-only-what-it-can-see.md) | antvet judges only what it can see | active | `antvet` `analyzer` `go-vet` `types-identical` `Find` `Configure` `subquery` `antvet-ignore` |
+| [83](083-antvet-judges-only-what-it-can-see.md) | antvet judges only what it can see | amended by [175](175-antvet-follows-a-query-built-up-in-a-variable.md) | `antvet` `analyzer` `go-vet` `types-identical` `Find` `Configure` `subquery` `antvet-ignore` |
 | [104](104-a-skill-for-coding-agents-ships-in-the-module.md) | A skill for coding agents ships in the module | active | `skill` `SKILL.md` `llms.txt` `claude-plugin` `agents` `doccheck` |
+| [175](175-antvet-follows-a-query-built-up-in-a-variable.md) | antvet follows a query built up in a variable | active | `antvet` `analyzer` `subquery` `variable` |
 
 #### Process and history
 
@@ -332,7 +334,7 @@ Before changing a file, read the decisions about it.
 | `.golangci.yml` | [77](077-layout-is-enforced-by-tools.md) |
 | `Makefile` | [77](077-layout-is-enforced-by-tools.md) [83](083-antvet-judges-only-what-it-can-see.md) |
 | `aggregate.go` | [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [145](145-helpers-take-a-field-of-any-type.md) |
-| `ant.go` | [12](012-additions-to-the-dialect-contract.md) [21](021-configuration-runs-when-a-context-opens.md) [29](029-sessions.md) [40](040-soft-deletes-are-a-filter.md) [61](061-sessions-take-options.md) [66](066-several-models-can-share-a-table.md) [67](067-naming-and-conventions-are-global.md) [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [120](120-the-root-does-not-track-and-a-session-does.md) [121](121-a-rollback-forgets-what-its-transaction-began-tracking.md) [125](125-open-refuses-a-model-it-would-misread.md) [154](154-the-ctx-carries-the-transaction.md) [155](155-a-bound-transaction-settles-what-its-contexts-did.md) [167](167-sqlite-row-locks-in-a-transaction-that-holds-the-write-lock.md) |
+| `ant.go` | [12](012-additions-to-the-dialect-contract.md) [21](021-configuration-runs-when-a-context-opens.md) [29](029-sessions.md) [40](040-soft-deletes-are-a-filter.md) [61](061-sessions-take-options.md) [66](066-several-models-can-share-a-table.md) [67](067-naming-and-conventions-are-global.md) [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [120](120-the-root-does-not-track-and-a-session-does.md) [121](121-a-rollback-forgets-what-its-transaction-began-tracking.md) [125](125-open-refuses-a-model-it-would-misread.md) [154](154-the-ctx-carries-the-transaction.md) [155](155-a-bound-transaction-settles-what-its-contexts-did.md) [167](167-sqlite-row-locks-in-a-transaction-that-holds-the-write-lock.md) [176](176-ants-structs-have-camelcase-json-keys.md) |
 | `ant_test.go` | [1](001-ant-ordered-replaces-cmp-ordered.md) [4](004-conditions-are-not-tied-to-a-model.md) [17](017-implemented-ahead-of-the-skeleton.md) [18](018-wrong-model-detection.md) [100](100-probes-are-named-after-their-model-in-the-plural.md) |
 | `anttest/anttest.go` | [121](121-a-rollback-forgets-what-its-transaction-began-tracking.md) |
 | `assign.go` | [89](089-one-column-one-value.md) [145](145-helpers-take-a-field-of-any-type.md) |
@@ -355,9 +357,9 @@ Before changing a file, read the decisions about it.
 | `dialect/postgres/ddl.go` | [50](050-three-layers-for-migrations.md) [52](052-new-not-null-columns-fill-existing-rows.md) [78](078-a-replaced-column-takes-its-dependents-along-and-they.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [130](130-partitioning-is-part-of-the-table.md) [131](131-a-foreign-key-column-follows-its-target.md) [133](133-a-concurrent-build-clears-its-leftover.md) [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) |
 | `dialect/postgres/ddl_test.go` | [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) |
 | `dialect/postgres/expression.go` | [57](057-drift-compares-what-the-server-stored.md) |
-| `dialect/postgres/functions.go` | [42](042-converters-are-scanner-and-valuer.md) [43](043-database-specific-helpers.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) [145](145-helpers-take-a-field-of-any-type.md) |
+| `dialect/postgres/functions.go` | [42](042-converters-are-scanner-and-valuer.md) [43](043-database-specific-helpers.md) [137](137-stored-tsvector-columns-have-a-separate-match-helper.md) [145](145-helpers-take-a-field-of-any-type.md) [176](176-ants-structs-have-camelcase-json-keys.md) |
 | `dialect/postgres/inspect.go` | [57](057-drift-compares-what-the-server-stored.md) [72](072-partitions-are-not-migrations.md) [73](073-drift-compares-what-models-declare.md) [114](114-an-identity-columns-default-is-not-ants-to-change.md) [133](133-a-concurrent-build-clears-its-leftover.md) [158](158-drift-compares-two-explicit-serial-defaults.md) |
-| `dialect/postgres/partitions.go` | [72](072-partitions-are-not-migrations.md) [161](161-a-month-is-read-from-its-bounds.md) |
+| `dialect/postgres/partitions.go` | [72](072-partitions-are-not-migrations.md) [161](161-a-month-is-read-from-its-bounds.md) [176](176-ants-structs-have-camelcase-json-keys.md) |
 | `dialect/postgres/pgxext` | [71](071-dependencies-stay-out-of-the-root-package.md) |
 | `dialect/postgres/postgres.go` | [43](043-database-specific-helpers.md) [49](049-postgresql-first.md) |
 | `dialect/postgres/session.go` | [56](056-failure.md) |
@@ -404,6 +406,7 @@ Before changing a file, read the decisions about it.
 | `json.go` | [42](042-converters-are-scanner-and-valuer.md) [95](095-in-means-eq-and-other-value-rules.md) [109](109-numbers-inside-an-interface-read-as-json-number.md) |
 | `json_test.go` | [42](042-converters-are-scanner-and-valuer.md) [95](095-in-means-eq-and-other-value-rules.md) [109](109-numbers-inside-an-interface-read-as-json-number.md) [151](151-deletedat-is-a-time-or-null-in-json.md) |
 | `merge.go` | [80](080-every-write-moves-the-version-on.md) [89](089-one-column-one-value.md) [90](090-merge-keeps-what-other-writes-keep.md) [150](150-a-zero-key-nothing-fills-is-refused.md) [166](166-find-reads-the-row-after-a-bulk-delete.md) |
+| `metrics/metrics.go` | [176](176-ants-structs-have-camelcase-json-keys.md) |
 | `migrate/cli.go` | [11](011-migration-model.md) [55](055-renames.md) [58](058-squashing-needs-no-coordination.md) [59](059-adopting-an-existing-database.md) [116](116-code-files-rerun-after-versioned-migrations.md) [117](117-the-migrate-program-takes-the-applications-options.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md) [129](129-status-check-fails-a-deploy-gate.md) [144](144-script-stops-before-a-go-migration.md) |
 | `migrate/config.go` | [11](011-migration-model.md) [60](060-one-program-two-jobs.md) [117](117-the-migrate-program-takes-the-applications-options.md) |
 | `migrate/engine.go` | [50](050-three-layers-for-migrations.md) [56](056-failure.md) [58](058-squashing-needs-no-coordination.md) [115](115-a-file-outside-a-transaction-is-recorded-before-it-runs.md) [116](116-code-files-rerun-after-versioned-migrations.md) [126](126-a-migration-runs-as-it-says-or-not-at-all.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md) |
@@ -416,7 +419,7 @@ Before changing a file, read the decisions about it.
 | `migrate/registry.go` | [56](056-failure.md) |
 | `migrate/source.go` | [11](011-migration-model.md) [60](060-one-program-two-jobs.md) [113](113-a-missing-versions-folder-is-an-error.md) |
 | `options.go` | [29](029-sessions.md) [48](048-replicas.md) [61](061-sessions-take-options.md) [69](069-errors-carry-their-sql.md) [120](120-the-root-does-not-track-and-a-session-does.md) [167](167-sqlite-row-locks-in-a-transaction-that-holds-the-write-lock.md) |
-| `paging.go` | [81](081-a-set-operations-members-keep-their-own-paging.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) [143](143-paging-arguments-out-of-range-are-errpaging.md) |
+| `paging.go` | [81](081-a-set-operations-members-keep-their-own-paging.md) [142](142-chunk-lets-go-of-a-group-that-has-nothing-to-save.md) [143](143-paging-arguments-out-of-range-are-errpaging.md) [176](176-ants-structs-have-camelcase-json-keys.md) |
 | `pivot.go` | [44](044-many-to-many.md) [64](064-through-relations-are-read-only-pivots.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) |
 | `projection.go` | [5](005-select-closures-run-client-side.md) [35](035-typed-expressions.md) [136](136-an-outer-joins-side-reads-what-only-the-driver-converts.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) [147](147-a-projection-reads-null-into-a-plain-field-as-zero.md) |
 | `qb/aliased_test.go` | [14](014-the-dialect-interface-exposes-an-internal-type.md) [62](062-the-statement-ast-is-public.md) |
@@ -514,6 +517,7 @@ Before changing a file, read the decisions about it.
 | `tests/features/model_definition/embedded_test.go` | [87](087-an-embedded-field-must-be-a-struct-value.md) |
 | `tests/features/model_definition/field_roles_test.go` | [98](098-an-explicit-write-refuses-the-columns-ant-keeps.md) |
 | `tests/features/model_definition/inheritance_test.go` | [66](066-several-models-can-share-a-table.md) [67](067-naming-and-conventions-are-global.md) [117](117-the-migrate-program-takes-the-applications-options.md) |
+| `tests/features/model_definition/json_keys_test.go` | [176](176-ants-structs-have-camelcase-json-keys.md) |
 | `tests/features/model_definition/nullable_test.go` | [51](051-modeling-added-for-migrations.md) |
 | `tests/features/model_definition/refused_test.go` | [125](125-open-refuses-a-model-it-would-misread.md) [132](132-default-names-are-valid-and-distinct.md) |
 | `tests/features/model_definition/table_groups_test.go` | [66](066-several-models-can-share-a-table.md) |
@@ -592,11 +596,12 @@ Before changing a file, read the decisions about it.
 | `tools/antfmt/main.go` | [77](077-layout-is-enforced-by-tools.md) |
 | `tools/antvet` | [71](071-dependencies-stay-out-of-the-root-package.md) |
 | `tools/antvet/analyzer` | [4](004-conditions-are-not-tied-to-a-model.md) |
-| `tools/antvet/analyzer/analyzer.go` | [83](083-antvet-judges-only-what-it-can-see.md) |
+| `tools/antvet/analyzer/analyzer.go` | [83](083-antvet-judges-only-what-it-can-see.md) [175](175-antvet-follows-a-query-built-up-in-a-variable.md) |
 | `tools/antvet/analyzer/analyzer_test.go` | [4](004-conditions-are-not-tied-to-a-model.md) [83](083-antvet-judges-only-what-it-can-see.md) |
 | `tools/antvet/analyzer/sessions.go` | [153](153-changes-saved-through-another-context-are-reported-by-antvet.md) |
 | `tools/antvet/analyzer/testdata` | [83](083-antvet-judges-only-what-it-can-see.md) |
 | `tools/antvet/analyzer/testdata/src/example/sessions.go` | [153](153-changes-saved-through-another-context-are-reported-by-antvet.md) |
+| `tools/antvet/analyzer/testdata/src/example/variables.go` | [175](175-antvet-follows-a-query-built-up-in-a-variable.md) |
 | `tools/antvet/cmd` | [83](083-antvet-judges-only-what-it-can-see.md) |
 | `tools/compare` | [71](071-dependencies-stay-out-of-the-root-package.md) |
 | `tx.go` | [2](002-tx-is-a-generic-method-on-context.md) [31](031-failed-saves.md) [47](047-hooks-run-inside-the-write.md) [48](048-replicas.md) [61](061-sessions-take-options.md) [70](070-dryrun-really-runs.md) [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [99](099-a-retried-attempt-leaves-nothing-in-the-tracker.md) [106](106-begin-inside-a-transaction-opens-a-savepoint.md) [121](121-a-rollback-forgets-what-its-transaction-began-tracking.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md) [154](154-the-ctx-carries-the-transaction.md) [155](155-a-bound-transaction-settles-what-its-contexts-did.md) [167](167-sqlite-row-locks-in-a-transaction-that-holds-the-write-lock.md) |
@@ -613,10 +618,12 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `AfterInsert`: [47](047-hooks-run-inside-the-write.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md)
 - `aggregate`: [35](035-typed-expressions.md) [147](147-a-projection-reads-null-into-a-plain-field-as-zero.md)
 - `All`: [6](006-return-shapes-and-tracking.md) [27](027-all-returns-t.md)
-- `antvet`: [4](004-conditions-are-not-tied-to-a-model.md) [71](071-dependencies-stay-out-of-the-root-package.md) [83](083-antvet-judges-only-what-it-can-see.md) [153](153-changes-saved-through-another-context-are-reported-by-antvet.md)
+- `analyzer`: [83](083-antvet-judges-only-what-it-can-see.md) [175](175-antvet-follows-a-query-built-up-in-a-variable.md)
+- `antvet`: [4](004-conditions-are-not-tied-to-a-model.md) [71](071-dependencies-stay-out-of-the-root-package.md) [83](083-antvet-judges-only-what-it-can-see.md) [153](153-changes-saved-through-another-context-are-reported-by-antvet.md) [175](175-antvet-follows-a-query-built-up-in-a-variable.md)
 - `arrays`: [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [136](136-an-outer-joins-side-reads-what-only-the-driver-converts.md)
 - `Attach`: [110](110-a-version-the-application-sets-is-the-one-checked.md) [153](153-changes-saved-through-another-context-are-reported-by-antvet.md)
 - `Attempts`: [99](099-a-retried-attempt-leaves-nothing-in-the-tracker.md) [121](121-a-rollback-forgets-what-its-transaction-began-tracking.md)
+- `Base`: [25](025-scanning.md) [176](176-ants-structs-have-camelcase-json-keys.md)
 - `baseline`: [58](058-squashing-needs-no-coordination.md) [59](059-adopting-an-existing-database.md) [127](127-commands-refuse-to-guess-which-migration-is-meant.md) [128](128-adopt-leaves-out-roles.md)
 - `Batch`: [22](022-inserts-run-one-statement-per-row.md) [71](071-dependencies-stay-out-of-the-root-package.md)
 - `Begin`: [106](106-begin-inside-a-transaction-opens-a-savepoint.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md)
@@ -723,7 +730,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `Ordered`: [1](001-ant-ordered-replaces-cmp-ordered.md) [145](145-helpers-take-a-field-of-any-type.md)
 - `orphan`: [30](030-tracking-follows-keys-not-addresses.md) [149](149-a-has-one-pointer-is-the-truth-about-its-row.md)
 - `otel`: [46](046-interceptors.md) [97](097-spans-name-the-database-the-dialect-talks-to.md)
-- `Page`: [81](081-a-set-operations-members-keep-their-own-paging.md) [143](143-paging-arguments-out-of-range-are-errpaging.md)
+- `Page`: [81](081-a-set-operations-members-keep-their-own-paging.md) [143](143-paging-arguments-out-of-range-are-errpaging.md) [176](176-ants-structs-have-camelcase-json-keys.md)
 - `partitions`: [72](072-partitions-are-not-migrations.md) [130](130-partitioning-is-part-of-the-table.md) [161](161-a-month-is-read-from-its-bounds.md)
 - `pg_dump`: [59](059-adopting-an-existing-database.md) [128](128-adopt-leaves-out-roles.md)
 - `pivot`: [44](044-many-to-many.md) [64](064-through-relations-are-read-only-pivots.md)
@@ -765,7 +772,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `sqlite`: [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [118](118-a-sqlite-dsn-says-whether-foreign-keys-are-on.md) [159](159-a-sqlite-dsn-names-its-lock-behavior.md) [160](160-sqlite-time-aggregates-read-text.md) [164](164-explain-reads-each-databases-plan-statement.md) [167](167-sqlite-row-locks-in-a-transaction-that-holds-the-write-lock.md)
 - `sqlserver`: [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [88](088-sql-server-recurses-with-union-all-and-a-path-of-keys.md) [164](164-explain-reads-each-databases-plan-statement.md) [165](165-sql-server-orders-only-where-it-counts.md)
 - `step-1`: [8](008-step-1-file-count.md) [9](009-owner-review-of-step-1.md)
-- `subquery`: [37](037-references-to-outer-queries.md) [38](038-bulk-writes.md) [83](083-antvet-judges-only-what-it-can-see.md) [165](165-sql-server-orders-only-where-it-counts.md)
+- `subquery`: [37](037-references-to-outer-queries.md) [38](038-bulk-writes.md) [83](083-antvet-judges-only-what-it-can-see.md) [165](165-sql-server-orders-only-where-it-counts.md) [175](175-antvet-follows-a-query-built-up-in-a-variable.md)
 - `tags`: [125](125-open-refuses-a-model-it-would-misread.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md)
 - `terminal-call`: [18](018-wrong-model-detection.md) [37](037-references-to-outer-queries.md)
 - `time`: [1](001-ant-ordered-replaces-cmp-ordered.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md) [92](092-tracked-values-compare-as-stored.md) [160](160-sqlite-time-aggregates-read-text.md)

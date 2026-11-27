@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1534,9 +1535,14 @@ func loadProbes() []probe {
 // addresses stay fixed even under a moving collector, and the pin also tells
 // the current GC about the pointer arithmetic done on them.
 // TestProbeSurvivesGC covers this use.
+//
+// The slice of probes is kept in ascending base order. No two probes overlap
+// (TestProbesDoNotOverlap), so Resolve finds the one covering an address by
+// binary search on that order.
 type probe struct {
 	ptr   unsafe.Pointer
 	base  uintptr
+	end   uintptr // base plus the model's size, computed once at registration
 	model *Model
 }
 
@@ -1562,14 +1568,30 @@ func Probe[T any]() *T {
 	p := new(T)
 	pinner.Pin(p)
 
-	// Clip makes append copy, so readers of current never see it change.
-	next := append(
-		slices.Clip(current),
-		probe{unsafe.Pointer(p), uintptr(unsafe.Pointer(p)), model},
-	)
+	next := insertProbe(current, probe{
+		ptr:   unsafe.Pointer(p),
+		base:  uintptr(unsafe.Pointer(p)),
+		end:   uintptr(unsafe.Pointer(p)) + model.Type.Size(),
+		model: model,
+	})
 	probes.Store(&next)
 
 	return p
+}
+
+// insertProbe returns list with one probe added, keeping the ascending base
+// order Resolve's binary search relies on.
+func insertProbe(list []probe, add probe) []probe {
+	at := sort.Search(len(list), func(i int) bool { return list[i].base >= add.base })
+
+	// A fresh slice each time, behind a new address; readers of list never see
+	// it change.
+	next := make([]probe, len(list)+1)
+	copy(next, list[:at])
+	next[at] = add
+	copy(next[at+1:], list[at:])
+
+	return next
 }
 
 // probeOf returns model's probe in list, or nil.
@@ -1596,23 +1618,57 @@ func Resolve[V any](ptr *V) (Ref, bool) {
 	addr := uintptr(unsafe.Pointer(ptr))
 	t := reflect.TypeFor[V]()
 
-	for _, p := range loadProbes() {
-		if addr < p.base || addr >= p.base+p.model.Type.Size() {
-			continue
+	list := loadProbes()
+
+	// Probes are sorted by base and do not overlap, so at most one holds addr.
+	// A plain loop over the bounds beats sort.Search's comparator closure here,
+	// which cannot inline and runs for every condition of every query.
+	at := -1
+
+	if len(list) <= 8 {
+		// Ranges are disjoint, so the one holding addr is the only match and the
+		// scan can stop there rather than walk the list to its end.
+		for i, q := range list {
+			if addr >= q.base && addr < q.end {
+				at = i
+
+				break
+			}
 		}
-
-		off := addr - p.base
-
-		for _, f := range p.model.Fields {
-			if f.Offset == off && (f.Type == t || f.deletionTime(t)) {
-				return Ref{Model: p.model, Field: f}, true
+	} else {
+		lo, hi := 0, len(list)
+		for lo < hi {
+			mid := lo + (hi-lo)/2
+			if list[mid].base > addr {
+				hi = mid
+			} else {
+				lo = mid + 1
 			}
 		}
 
-		for _, r := range p.model.Relations {
-			if r.Offset == off && r.Type == t {
-				return Ref{Model: p.model, Relation: r}, true
-			}
+		at = lo - 1
+	}
+
+	if at < 0 {
+		return Ref{}, false
+	}
+
+	p := list[at]
+	if addr >= p.end {
+		return Ref{}, false
+	}
+
+	off := addr - p.base
+
+	for _, f := range p.model.Fields {
+		if f.Offset == off && (f.Type == t || f.deletionTime(t)) {
+			return Ref{Model: p.model, Field: f}, true
+		}
+	}
+
+	for _, r := range p.model.Relations {
+		if r.Offset == off && r.Type == t {
+			return Ref{Model: p.model, Relation: r}, true
 		}
 	}
 
