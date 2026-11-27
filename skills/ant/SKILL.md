@@ -126,7 +126,9 @@ Calls that take columns of mixed types take `ant.FieldRef`, made with
   such as `uuid.UUID` or `string`, is yours to fill: set it, generate it in
   `Configure` with `ant.GenerateKey(b, &Docs.ID, uuid.New)`, or give it a default
   (`ant:"default=gen_random_uuid()"`). Inserting one at its zero value returns
-  `ant.ErrZeroKey`.
+  `ant.ErrZeroKey`. For keys that sort by time, generate with
+  `ids.UUIDv7[uuid.UUID]` (package `ant/ids`): a `uuid.UUID` key is a `uuid`
+  column, while a `string` key, such as one `ids.UUID` fills, is a `text` column.
 - `time.Time` fields named `CreatedAt` and `UpdatedAt` are maintained by ant, on any
   model. `ant.Base` is just `ID`, `CreatedAt` and `UpdatedAt`. A zero `UpdatedAt`,
   as in a struct decoded from a request body, is stamped on every save.

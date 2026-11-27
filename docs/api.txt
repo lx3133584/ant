@@ -718,6 +718,7 @@ ids: func (s *Snowflake) Next() int64
 ids: func NewSnowflake(node int64) (*Snowflake, error)
 ids: func ULID() string
 ids: func UUID() string
+ids: func UUIDv7[T ~[16]byte]() T
 ids: type Snowflake
 metrics: func (m *Metrics) After(_ context.Context, s *ant.Statement, o ant.Outcome)
 metrics: func (m *Metrics) Before(ctx context.Context, _ *ant.Statement) (context.Context, error)

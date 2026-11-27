@@ -87,6 +87,7 @@ On 2026-11-20 the decisions moved from one file, `docs/DECISIONS.md`, to a file 
 | [150](150-a-zero-key-nothing-fills-is-refused.md) | A zero key that nothing fills is refused | active | `primary-key` `uuid` `zero-value` `GenerateKey` `default` `ErrZeroKey` |
 | [151](151-deletedat-is-a-time-or-null-in-json.md) | DeletedAt is a time or null in JSON | active | `DeletedAt` `soft-delete` `JSON` `MarshalJSON` |
 | [152](152-open-refuses-values-the-driver-cannot-take.md) | Open refuses values the driver can't take | active | `Open` `ErrNoColumnType` `driver` `slice` `map` `struct` `PlainValues` `Table` |
+| [168](168-ids-uuidv7-makes-a-uuid-of-any-16-byte-type.md) | ids.UUIDv7 makes a UUID of any 16-byte type | active | `ids.UUIDv7` `ids.UUID` `GenerateKey` `uuid` `keys` `text` |
 | [176](176-ants-structs-have-camelcase-json-keys.md) | ant's structs have camelCase JSON keys | active | `json` `Base` `Page` `CursorPage` `Point` `Partition` `metrics` `breaking` |
 
 #### Values and types
@@ -382,6 +383,8 @@ Before changing a file, read the decisions about it.
 | `go.mod` | [10](010-module-path.md) |
 | `graph.go` | [93](093-tracking-follows-what-a-save-wrote.md) [120](120-the-root-does-not-track-and-a-session-does.md) |
 | `hooks.go` | [47](047-hooks-run-inside-the-write.md) [105](105-read-mostly-registries-are-copy-on-write-snapshots.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md) [154](154-the-ctx-carries-the-transaction.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md) |
+| `ids/ids.go` | [168](168-ids-uuidv7-makes-a-uuid-of-any-16-byte-type.md) |
+| `ids/ids_test.go` | [168](168-ids-uuidv7-makes-a-uuid-of-any-16-byte-type.md) |
 | `include.go` | [33](033-include-shape-functions.md) [44](044-many-to-many.md) [65](065-scoped-relations-use-the-same-filter-path.md) [93](093-tracking-follows-what-a-save-wrote.md) [138](138-a-uint64-column-on-postgresql-is-numeric.md) |
 | `intercept.go` | [46](046-interceptors.md) |
 | `internal/errs/errs.go` | [17](017-implemented-ahead-of-the-skeleton.md) [125](125-open-refuses-a-model-it-would-misread.md) |
@@ -482,6 +485,7 @@ Before changing a file, read the decisions about it.
 | `tests/features/fixture/fixture.go` | [26](026-feature-examples-run-on-postgresql-only.md) |
 | `tests/features/keys_and_identity/generated_key_test.go` | [19](019-a-zero-generated-key-means-assign-one.md) |
 | `tests/features/keys_and_identity/string_uuid_keys_test.go` | [150](150-a-zero-key-nothing-fills-is-refused.md) |
+| `tests/features/keys_and_identity/uuidv7_key_test.go` | [168](168-ids-uuidv7-makes-a-uuid-of-any-16-byte-type.md) |
 | `tests/features/lifecycle/concurrency_test.go` | [110](110-a-version-the-application-sets-is-the-one-checked.md) |
 | `tests/features/lifecycle/filters_test.go` | [39](039-global-filters-are-lazy.md) |
 | `tests/features/lifecycle/hooks_test.go` | [47](047-hooks-run-inside-the-write.md) [123](123-an-after-hooks-edit-is-a-change-to-save.md) |
@@ -678,6 +682,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `FromCTE`: [36](036-derived-tables-keep-the-models-name.md) [38](038-bulk-writes.md)
 - `generated-column`: [78](078-a-replaced-column-takes-its-dependents-along-and-they.md) [94](094-migrations-keep-a-columns-dependents-working-while-it.md)
 - `generated-key`: [19](019-a-zero-generated-key-means-assign-one.md) [22](022-inserts-run-one-statement-per-row.md) [90](090-merge-keeps-what-other-writes-keep.md)
+- `GenerateKey`: [150](150-a-zero-key-nothing-fills-is-refused.md) [168](168-ids-uuidv7-makes-a-uuid-of-any-16-byte-type.md)
 - `global-filter`: [39](039-global-filters-are-lazy.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md)
 - `go-vet`: [4](004-conditions-are-not-tied-to-a-model.md) [83](083-antvet-judges-only-what-it-can-see.md)
 - `Gt`: [1](001-ant-ordered-replaces-cmp-ordered.md) [145](145-helpers-take-a-field-of-any-type.md)
@@ -697,6 +702,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `InTx`: [154](154-the-ctx-carries-the-transaction.md) [155](155-a-bound-transaction-settles-what-its-contexts-did.md)
 - `JSON`: [42](042-converters-are-scanner-and-valuer.md) [109](109-numbers-inside-an-interface-read-as-json-number.md) [151](151-deletedat-is-a-time-or-null-in-json.md)
 - `jsonb`: [134](134-a-type-postgresql-has-a-column-for-maps-to-it-and-reads-back.md) [135](135-a-column-ant-made-for-an-earlier-default-is-converted-as-ant-stored-it.md)
+- `keys`: [138](138-a-uint64-column-on-postgresql-is-numeric.md) [168](168-ids-uuidv7-makes-a-uuid-of-any-16-byte-type.md)
 - `LastInsertId`: [75](075-generated-values-without-returning.md) [122](122-what-the-database-fills-is-read-back-by-key.md)
 - `Latest`: [65](065-scoped-relations-use-the-same-filter-path.md) [163](163-includejoined-applies-the-relations-own-conditions.md)
 - `LeftJoin`: [136](136-an-outer-joins-side-reads-what-only-the-driver-converts.md) [147](147-a-projection-reads-null-into-a-plain-field-as-zero.md)
@@ -796,7 +802,7 @@ Tags on two or more decisions. Search the headers for the rest: `rg -l '^tags: .
 - `UseTx`: [79](079-a-tracking-context-serves-one-operation-at-a-time.md) [141](141-a-statement-inside-an-each-loop-on-one-connection-is-refused.md)
 - `utc`: [41](041-automatic-timestamps.md) [76](076-one-clock-for-times-without-a-zone.md) [84](084-every-time-is-bound-in-utc-where-columns-keep-no-zone.md)
 - `UTCTimes`: [74](074-dialects-state-their-differences.md) [76](076-one-clock-for-times-without-a-zone.md)
-- `uuid`: [131](131-a-foreign-key-column-follows-its-target.md) [145](145-helpers-take-a-field-of-any-type.md) [150](150-a-zero-key-nothing-fills-is-refused.md)
+- `uuid`: [131](131-a-foreign-key-column-follows-its-target.md) [145](145-helpers-take-a-field-of-any-type.md) [150](150-a-zero-key-nothing-fills-is-refused.md) [168](168-ids-uuidv7-makes-a-uuid-of-any-16-byte-type.md)
 - `Validate`: [47](047-hooks-run-inside-the-write.md) [157](157-insert-validation-leaves-zero-default-fields-to-the-database.md)
 - `valuer`: [42](042-converters-are-scanner-and-valuer.md) [92](092-tracked-values-compare-as-stored.md)
 - `version`: [80](080-every-write-moves-the-version-on.md) [90](090-merge-keeps-what-other-writes-keep.md) [91](091-an-upsert-checks-a-copys-version-on-mysql-and-mariadb.md) [93](093-tracking-follows-what-a-save-wrote.md) [102](102-updatemany-keeps-what-a-bulk-update-keeps.md) [110](110-a-version-the-application-sets-is-the-one-checked.md) [139](139-a-field-can-not-ask-for-two-things-ant-can-not-both-do.md) [140](140-an-update-that-changed-nothing-is-checked-against-the-row.md)
