@@ -256,12 +256,24 @@ func TestFieldRulesReportEveryField(t *testing.T) {
 		require.Error(t, err)
 
 		// errors.As reaches the first of the joined errors, as before.
-		var invalid *ant.ValidationError
-		require.ErrorAs(t, err, &invalid)
+		var first *ant.ValidationError
+		require.ErrorAs(t, err, &first)
+		require.Equal(t, "Name", first.Field)
+		require.ErrorIs(t, err, validate.ErrRequired)
 
-		// Every field is named somewhere in the message.
-		for _, field := range []string{"Name", "Email", "Age"} {
-			require.ErrorContains(t, err, field)
+		var joined interface{ Unwrap() []error }
+		require.ErrorAs(t, err, &joined)
+		failures := joined.Unwrap()
+		require.Len(t, failures, 3)
+
+		fields := make([]string, 0, len(failures))
+		for _, failure := range failures {
+			var invalid *ant.ValidationError
+			require.ErrorAs(t, failure, &invalid)
+			require.Equal(t, "Signup", invalid.Model)
+			require.Error(t, invalid.Err)
+			fields = append(fields, invalid.Field)
 		}
+		require.ElementsMatch(t, []string{"Name", "Email", "Age"}, fields)
 	})
 }
