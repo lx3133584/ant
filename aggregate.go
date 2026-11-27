@@ -3,6 +3,7 @@ package ant
 import (
 	"context"
 	"database/sql"
+	"strconv"
 
 	"github.com/skudra-go/ant/qb"
 )
@@ -28,7 +29,7 @@ func scalar[V any](ctx context.Context, b *builder, value Expr[V]) (V, error) {
 		return zero, err
 	}
 
-	rows, err := n.state.query(ctx, n.statement([]qb.Selected{{Value: value.node}}))
+	rows, err := n.query(ctx, n.statement([]qb.Selected{{Value: value.node}}))
 	if err != nil {
 		return zero, err
 	}
@@ -44,21 +45,52 @@ func scalar[V any](ctx context.Context, b *builder, value Expr[V]) (V, error) {
 // Count returns the number of matching rows. Limit, Offset, and Distinct are
 // honored, by counting over a subquery.
 func (q *Query[T]) Count(ctx context.Context) (int64, error) {
-	if q.limit == nil && q.offset == nil && !q.distinct {
-		return scalar(ctx, &q.builder, Count())
+	if q.picksRows() {
+		if err := q.readyToRead(); err != nil {
+			return 0, err
+		}
 	}
 
-	if err := q.readyToRead(); err != nil {
+	return countRows(ctx, &q.builder, q.selection, false)
+}
+
+// Exists reports whether any row matches. It stops at the first one.
+func (q *Query[T]) Exists(ctx context.Context) (bool, error) {
+	return existsRows(ctx, &q.builder, q.selection, false)
+}
+
+// picksRows reports whether Limit, Offset, Distinct or GroupBy decide which rows
+// b returns, so that counting them needs a subquery that keeps the select list.
+func (b *builder) picksRows() bool {
+	return b.limit != nil || b.offset != nil || b.distinct || len(b.group) > 0
+}
+
+// countRows counts the rows b returns, whose select list columns gives: with
+// COUNT(*) in its place when nothing picks the rows, and otherwise over a
+// subquery that selects them. computed says the select list can decide the rows
+// itself, as a projection's expressions can: an aggregate makes one row of
+// many, or of none, and a set-returning function many of one.
+func countRows(
+	ctx context.Context,
+	b *builder,
+	columns func() []qb.Selected,
+	computed bool,
+) (int64, error) {
+	if !computed && !b.picksRows() {
+		return scalar(ctx, b, Count())
+	}
+
+	if err := b.ready(); err != nil {
 		return 0, err
 	}
 
-	inner := q.statement(q.selection())
+	inner := b.statement(numberedColumns(columns()))
 	inner.Order = nil
 	inner.Lock = nil
 
 	const alias = "ant_counted"
 
-	rows, err := q.state.query(ctx, lift(
+	rows, err := b.query(ctx, lift(
 		&qb.Select{
 			Columns: []qb.Selected{{Value: Count().node}},
 			From:    qb.Source{Sub: inner, Alias: alias},
@@ -77,17 +109,55 @@ func (q *Query[T]) Count(ctx context.Context) (int64, error) {
 	return *n, nil
 }
 
-// Exists reports whether any row matches. It stops at the first one.
-func (q *Query[T]) Exists(ctx context.Context) (bool, error) {
-	if err := q.ready(); err != nil {
+// numberedColumns names the columns ant_1, ant_2 and so on: a derived table
+// needs names that differ, and the sides of a join share some, such as id.
+func numberedColumns(columns []qb.Selected) []qb.Selected {
+	out := make([]qb.Selected, len(columns))
+
+	for i, c := range columns {
+		out[i] = qb.Selected{Value: c.Value, Alias: "ant_" + strconv.Itoa(i+1)}
+	}
+
+	return out
+}
+
+// existsRows reports whether b returns any row, stopping at the first, with
+// columns its select list. It selects 1 in their place, except where the
+// columns decide the rows: when computed says they can, as in countRows, and
+// where Distinct or GroupBy decide the rows an Offset skips, since MySQL,
+// MariaDB and SQLite drop either from an EXISTS subquery, and with a 1 DISTINCT
+// would leave one row. There the rows are read from a derived table of the
+// columns.
+func existsRows(
+	ctx context.Context,
+	b *builder,
+	columns func() []qb.Selected,
+	computed bool,
+) (bool, error) {
+	if err := b.ready(); err != nil {
 		return false, err
 	}
 
-	inner := q.statement([]qb.Selected{{Value: qb.Fragment{SQL: "1"}}})
-	inner.Order = nil
-	inner.Lock = nil
+	one := []qb.Selected{{Value: qb.Fragment{SQL: "1"}}}
 
-	rows, err := q.state.query(
+	var inner *qb.Select
+
+	if computed || (b.distinct || len(b.group) > 0) && b.offset != nil {
+		picked := b.statement(numberedColumns(columns()))
+		picked.Order = nil
+		picked.Lock = nil
+
+		inner = lift(
+			&qb.Select{Columns: one, From: qb.Source{Sub: picked, Alias: "ant_rows"}},
+			picked,
+		)
+	} else {
+		inner = b.statement(one)
+		inner.Order = nil
+		inner.Lock = nil
+	}
+
+	rows, err := b.query(
 		ctx,
 		lift(&qb.Select{Columns: []qb.Selected{{Value: qb.Exists{Select: inner}}}}, inner),
 	)
@@ -158,7 +228,7 @@ func aggregateOf[T, V any](ctx context.Context, q *Query[T], value Expr[V]) (V, 
 
 	f.Args = []qb.Expr{qb.Column{Alias: alias, Name: column}}
 
-	rows, err := n.state.query(ctx, lift(
+	rows, err := n.query(ctx, lift(
 		&qb.Select{
 			Columns: []qb.Selected{{Value: f}},
 			From:    qb.Source{Sub: inner, Alias: alias},
@@ -222,7 +292,7 @@ func Pluck[T, V any](ctx context.Context, q *Query[T], field *V) ([]V, error) {
 		return nil, err
 	}
 
-	rows, err := n.state.query(ctx, n.statement([]qb.Selected{{Value: value.node}}))
+	rows, err := n.query(ctx, n.statement([]qb.Selected{{Value: value.node}}))
 	if err != nil {
 		return nil, err
 	}
