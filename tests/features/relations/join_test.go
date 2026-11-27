@@ -138,6 +138,7 @@ func TestJoin(t *testing.T) {
 				Select(toByline).
 				All(ctx)
 			require.ErrorIs(t, err, ant.ErrWrongModel)
+			require.ErrorContains(t, err, "other.ID in a query of Post, User")
 		})
 	})
 }

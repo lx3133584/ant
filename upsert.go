@@ -1098,7 +1098,7 @@ func (t *Table[T]) UpdateMany(
 		}
 
 		if ref.model != model {
-			return 0, ErrWrongModel
+			return 0, wrongField(ref.field, ref.model, model)
 		}
 
 		columns = append(columns, ref.field.Column)

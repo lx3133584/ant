@@ -880,8 +880,10 @@ func relatedTo[T, R, V any](h Handle, entity *T, rel *V) *Query[R] {
 		q.fail(ErrNilEntity)
 
 		return q
-	case r.Owner != configure[T]():
-		q.fail(ErrWrongModel)
+	}
+
+	if model := configure[T](); r.Owner != model {
+		q.fail(wrongRelation(r, model))
 
 		return q
 	}

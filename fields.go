@@ -66,6 +66,30 @@ func relation[V any](field *V) (*meta.Relation, error) {
 	return ref.Relation, nil
 }
 
+// wrongRelation is the error for a relation used with a model that does not own
+// it. It names the relation, as Post.User, and the model it was used with.
+func wrongRelation(r *meta.Relation, with *meta.Model) error {
+	return fmt.Errorf(
+		"%w: %s.%s is not a relation of %s",
+		ErrWrongModel,
+		r.Owner.Type.Name(),
+		r.Name,
+		with.Type.Name(),
+	)
+}
+
+// wrongField is the error for a field used with a model it does not belong to.
+// It names the field, as Post.Rank, and the model it was used with.
+func wrongField(f *meta.Field, owner, with *meta.Model) error {
+	return fmt.Errorf(
+		"%w: %s.%s is not a field of %s",
+		ErrWrongModel,
+		owner.Type.Name(),
+		f.Name,
+		with.Type.Name(),
+	)
+}
+
 // linkOf resolves a relation to R.
 func linkOf[R any, V any](field *V) (*meta.Relation, meta.Link, error) {
 	r, err := relation(field)

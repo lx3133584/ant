@@ -2,6 +2,7 @@ package ant_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,6 +106,9 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 		name string
 		run  func() error
 		want error
+		// says is what the error names, when it names a field: a chain is not
+		// bisected to find which one it was (#166).
+		says string
 	}{
 		{
 			"non-probe condition",
@@ -115,6 +119,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrNotProbe,
+			"",
 		},
 		{
 			"wrong model condition",
@@ -125,6 +130,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrWrongModel,
+			"user.Age in a query of post",
 		},
 		{
 			"wrong model nested in Or",
@@ -136,6 +142,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrWrongModel,
+			"user.Age in a query of post",
 		},
 		{
 			"wrong model order",
@@ -146,6 +153,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrWrongModel,
+			"user.Name in a query of post",
 		},
 		{
 			"wrong model assignment",
@@ -156,6 +164,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrWrongModel,
+			"user.Age in a query of post",
 		},
 		{
 			"non-probe relation",
@@ -168,6 +177,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrNotProbe,
+			"",
 		},
 		{
 			"probe of an unjoined model in a join",
@@ -182,6 +192,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrWrongModel,
+			"other.ID in a query of post, user",
 		},
 		{
 			"relation of an unjoined model",
@@ -192,6 +203,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrWrongModel,
+			"user.Posts in a query of post",
 		},
 		{
 			"error survives Join",
@@ -203,6 +215,7 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return err
 			},
 			ant.ErrNotProbe,
+			"",
 		},
 		{
 			"error reaches Each",
@@ -215,13 +228,19 @@ func TestBuilderErrorsSurfaceAtTerminal(t *testing.T) {
 				return nil
 			},
 			ant.ErrNotProbe,
+			"",
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if err := c.run(); !errors.Is(err, c.want) {
+			err := c.run()
+			if !errors.Is(err, c.want) {
 				t.Errorf("err = %v, want %v", err, c.want)
+			}
+
+			if c.says != "" && !strings.Contains(err.Error(), c.says) {
+				t.Errorf("err = %v, want it to say %q", err, c.says)
 			}
 		})
 	}

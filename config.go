@@ -268,7 +268,7 @@ func (b *ModelBuilder[E]) keyField(ref FieldRef) *meta.Field {
 	}
 
 	if ref.model != b.model {
-		b.fail(ErrWrongModel)
+		b.fail(wrongField(ref.field, ref.model, b.model))
 
 		return nil
 	}
@@ -577,7 +577,7 @@ func configureRelation[E, V any](b *ModelBuilder[E], rel *V) *RelationBuilder {
 	}
 
 	if r.Owner != b.model {
-		b.fail(ErrWrongModel)
+		b.fail(wrongRelation(r, b.model))
 	}
 
 	return &RelationBuilder{relation: r, fail: b.fail}
