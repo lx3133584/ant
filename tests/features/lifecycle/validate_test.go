@@ -267,6 +267,7 @@ func TestFieldRulesReportEveryField(t *testing.T) {
 		require.Len(t, failures, 3)
 
 		fields := make([]string, 0, len(failures))
+
 		for _, failure := range failures {
 			var invalid *ant.ValidationError
 			require.ErrorAs(t, failure, &invalid)
@@ -274,6 +275,7 @@ func TestFieldRulesReportEveryField(t *testing.T) {
 			require.Error(t, invalid.Err)
 			fields = append(fields, invalid.Field)
 		}
+
 		require.ElementsMatch(t, []string{"Name", "Email", "Age"}, fields)
 	})
 }
