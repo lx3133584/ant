@@ -663,11 +663,12 @@ func (e *engine) run(ctx context.Context, tx *sql.Tx, m Migration) error {
 // ran runs a file's statements one at a time inside tx. PostgreSQL runs a whole
 // file as one string, but a failure then says nothing about which statement it
 // was unless the driver sends a position, which DDL and constraint errors do not
-// (#303). Running them one by one costs the same inside the transaction and lets
-// the failing statement and its line be named.
+// (#303). Running them one by one, in the same transaction, lets the failing
+// statement and its line be named. It is one round trip per statement instead of
+// one per file, which a large data migration notices.
 //
-// A file that already ends its own transaction, which checkBody refuses, is run
-// whole so that refusal is the error rather than a half-run file.
+// A file that ends its own transaction never gets here: checkBody has refused it
+// before the transaction began.
 func (e *engine) ran(ctx context.Context, tx *sql.Tx, m Migration) error {
 	if m.run != nil || m.noTransaction {
 		return e.run(ctx, tx, m)
@@ -798,24 +799,57 @@ func beginsStatement(script string, i int) bool {
 }
 
 // lineOfCode returns the line within text that first carries code, counting
-// from 1, skipping the comment lines and blank lines before it.
+// from 1, skipping the blank lines and the comments before it: a line comment to
+// its line's end, and a block comment to where it closes, over the lines it
+// runs and the block comments nested in it, as PostgreSQL reads them. Text that
+// is all comment gives its last line.
 func lineOfCode(text string) int {
-	line := 1
+	i := 0
 
-	for rest := text; ; line++ {
-		current, after, found := strings.Cut(rest, "\n")
+	for i < len(text) {
+		switch {
+		case text[i] == ' ' || text[i] == '\t' || text[i] == '\r' || text[i] == '\n':
+			i++
+		case strings.HasPrefix(text[i:], "--"):
+			end := strings.IndexByte(text[i:], '\n')
+			if end < 0 {
+				return 1 + strings.Count(text, "\n")
+			}
 
-		if trimmed := strings.TrimSpace(current); trimmed != "" &&
-			!strings.HasPrefix(trimmed, "--") {
-			return line
+			i += end + 1
+		case strings.HasPrefix(text[i:], "/*"):
+			i = afterBlockComment(text, i)
+		default:
+			return 1 + strings.Count(text[:i], "\n")
 		}
-
-		if !found {
-			return line
-		}
-
-		rest = after
 	}
+
+	return 1 + strings.Count(text, "\n")
+}
+
+// afterBlockComment returns where the block comment that opens at i ends, past
+// its closing mark, or the end of text when it is never closed.
+func afterBlockComment(text string, i int) int {
+	depth := 0
+
+	for i < len(text) {
+		switch {
+		case strings.HasPrefix(text[i:], "/*"):
+			depth++
+			i += 2
+		case strings.HasPrefix(text[i:], "*/"):
+			depth--
+			i += 2
+
+			if depth == 0 {
+				return i
+			}
+		default:
+			i++
+		}
+	}
+
+	return len(text)
 }
 
 type splitLine struct {
