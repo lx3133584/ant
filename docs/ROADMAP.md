@@ -304,7 +304,7 @@ The work keeps to these. A change that breaks one needs a decision.
 - [x] Batched `SaveChanges` statements
   - Inserts only, up to 200 rows a statement. A model with insert hooks, a `.Touch()` relation, or a `WithoutAutoTx` save is written one row at a time, because each of those needs a result per row. Updates stay one statement each, since a shared statement could only apply one set of columns.
 - [x] Batched bulk insert: `db.Users.InsertMany(ctx, users, ant.BatchSize(500))`
-- [x] Insert from a query: `db.Users.InsertFrom(ctx, ant.Project[T](q, mappings...))`
+- [x] Insert from a query: `db.Users.InsertFrom(ctx, ant.Project[T](q, mappings...))`, with `ant.WithConflict` to skip or update rows a unique constraint holds
 - [x] Insert ignoring conflicts: `ant.OnConflict(&Users.Email).DoNothing()`
 - [x] Upsert on conflict: `db.Users.Upsert(ctx, v, ant.OnConflict(&Users.Email))`
 - [x] Upsert selected columns: `.DoUpdate(ant.F(&Users.Name))`, `.Set(...)`
@@ -452,7 +452,7 @@ The model is defined in [decision 11](decisions/011-migration-model.md). The gui
 - [x] Checksum validation of applied files
 - [x] Repair stored checksums: `migrate repair`
 - [x] Migration lock during apply
-- [x] Drift detection against a live database: `migrate drift`
+- [x] Drift detection against a live database: `migrate drift`, including the columns that view models read
 - [x] Destructive change warnings in generated SQL
 - [x] Rename warning comment in generated SQL
 - [x] Default source from `io/fs.FS`, including `go:embed`
@@ -478,7 +478,7 @@ The model is defined in [decision 11](decisions/011-migration-model.md). The gui
 - [x] Mute hooks while seeding
 - [x] Data migrations in Go: `migrate.Register(version, fn)`
 - [x] Export generated SQL for use with other tools: `migrate script --plain`
-- [x] Rename without losing data: `diff --rename users.name=title`, or a prompt in a terminal
+- [x] Rename without losing data: `diff --rename users.name=title`, an enum value too (`status.banned=blocked`), or a prompt in a terminal
 - [x] Fill existing rows when adding a `NOT NULL` column
 - [x] Start from an existing database: `migrate adopt`, `migrate baseline`
 - [x] Accept the models with no migration: `migrate snapshot`
@@ -563,7 +563,7 @@ The model is defined in [decision 11](decisions/011-migration-model.md). The gui
 - [ ] Reverse engineering structs from a database: `migrate scaffold`
   - Skipped: Owner decision. A database does not say which integer is an enum, what a relation should be called, or what belongs together, so the output needs reading line by line anyway. Instead, [adopting a database](https://skudra.net/migrations/adopting) gives an AI assistant a prompt, and `drift` checks the result until nothing differs.
 - [x] Model inspection command: `migrate inspect`
-- [x] Database summary command: `migrate db-show`
+- [x] Database summary command: `migrate db-show`, with materialized views
 - [x] Documentation site: [skudra.net](https://skudra.net), built from [ant-docs](https://github.com/skudra-go/ant-docs)
   - Docusaurus, with every Go sample type-checked against ant.
 - [ ] Runnable examples for every public API

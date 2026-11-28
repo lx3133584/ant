@@ -126,7 +126,9 @@ Calls that take columns of mixed types take `ant.FieldRef`, made with
   such as `uuid.UUID` or `string`, is yours to fill: set it, generate it in
   `Configure` with `ant.GenerateKey(b, &Docs.ID, uuid.New)`, or give it a default
   (`ant:"default=gen_random_uuid()"`). Inserting one at its zero value returns
-  `ant.ErrZeroKey`.
+  `ant.ErrZeroKey`. For keys that sort by time, generate with
+  `ids.UUIDv7[uuid.UUID]` (package `ant/ids`): a `uuid.UUID` key is a `uuid`
+  column, while a `string` key, such as one `ids.UUID` fills, is a `text` column.
 - `time.Time` fields named `CreatedAt` and `UpdatedAt` are maintained by ant, on any
   model. `ant.Base` is just `ID`, `CreatedAt` and `UpdatedAt`. A zero `UpdatedAt`,
   as in a struct decoded from a request body, is stamped on every save.
@@ -195,7 +197,7 @@ Builder methods never return errors; the terminal call returns everything collec
 | `Find(ctx, key)` | `*T` by primary key, or `ant.ErrNotFound` |
 | `Count(ctx)`, `Exists(ctx)` | `int64`, `bool` |
 | `Each(ctx)` | an `iter.Seq2[T, error]` that streams; no `Include`, not tracked; in a transaction, no other statement inside the loop (`ant.ErrQueryInEach`) |
-| `Page(ctx, page, size)`, `After(ctx, cursor, size)` | numbered pages, cursor pages |
+| `Page(ctx, page, size)`, `After(ctx, cursor, size)` | numbered pages, cursor pages; `After` over a column that can be NULL needs `.NullsFirst()` or `.NullsLast()` |
 | `Chunk(ctx, size, fn)` | batches; `ChunkByKey` if `fn` changes the rows; a session stops tracking each batch once `fn` leaves nothing to save, so save inside `fn` |
 | `ant.Pluck(ctx, query, &Users.Name)` | one column as `[]string` |
 
@@ -278,6 +280,9 @@ titles, err := db.Posts.
 	Select(func(p *Post, u *User) string { return u.Name + ": " + p.Title }).
 	All(ctx)
 ```
+
+A join and a projection have `Count`, `Exists`, `ToSQL` and `Debug`, as a query
+does, so a page of joined rows can show its total.
 
 In `ant.Project`, a NULL from a left join's side or an aggregate over no rows
 reads into a plain field as its zero value, as `MaxOf` returns one. Wrap the

@@ -390,13 +390,30 @@ func (e *engine) drift(
 		e.say("%s", pendingNote(pending))
 	}
 
-	if plan.Empty() && len(sequences) == 0 {
+	external, err := e.externalTypes(ctx, conn, target)
+	if err != nil {
+		return err
+	}
+
+	views, err := e.viewChanges(ctx, conn, target)
+	if err != nil {
+		return err
+	}
+
+	tables := len(plan.Changes) + len(sequences)
+
+	if tables == 0 && len(views) == 0 {
 		e.say("No drift: the database matches %s.", source)
+		e.sayExternal(external)
 
 		return nil
 	}
 
-	e.say("The database differs from %s. To match, it would need to:", source)
+	defer e.sayExternal(external)
+
+	if tables > 0 {
+		e.say("The database differs from %s. To match, it would need to:", source)
+	}
 
 	for _, change := range plan.Changes {
 		e.say("  %s", change)
@@ -404,6 +421,20 @@ func (e *engine) drift(
 
 	for _, change := range sequences {
 		e.say("  %s", change)
+	}
+
+	if len(views) > 0 {
+		header := "The views the models read differ from the database:"
+
+		if tables > 0 {
+			header = "\n" + header
+		}
+
+		e.say("%s", header)
+
+		for _, change := range views {
+			e.say("  %s", change)
+		}
 	}
 
 	if slices.ContainsFunc(plan.Changes, defaultMissing) {
@@ -421,7 +452,107 @@ func (e *engine) drift(
 		e.say("\n%s", text)
 	}
 
-	return fmt.Errorf("%w: %s", ErrDrift, driftNote(len(plan.Changes)+len(sequences)))
+	return fmt.Errorf("%w: %s", ErrDrift, driftNote(tables+len(views)))
+}
+
+// viewChanges names each view of target that the database lacks, and each
+// column a model reads that its view lacks, if the dialect can tell. A view may
+// have more columns than the models read. Migrations do not create views, so
+// these are for the repeatable migrations that do to fix (#232). A read-only
+// model of a table that target has reads what migrations make of it.
+func (e *engine) viewChanges(
+	ctx context.Context,
+	conn *sql.Conn,
+	target *schema.Schema,
+) ([]string, error) {
+	d, ok := e.d.(schema.RelationColumns)
+	if !ok {
+		return nil, nil
+	}
+
+	kept, err := prune(target, e.config.Ignore)
+	if err != nil {
+		return nil, err
+	}
+
+	var out []string
+
+	for _, v := range kept.Views {
+		var (
+			columns []string
+			found   bool
+		)
+
+		if t := kept.Table(v.Ref()); t != nil {
+			found = true
+
+			for _, c := range t.Columns {
+				columns = append(columns, c.Name)
+			}
+		} else if columns, found, err = d.RelationColumns(ctx, conn, v.Ref()); err != nil {
+			return nil, err
+		}
+
+		if !found {
+			out = append(out, fmt.Sprintf("view %s is missing", v.Ref()))
+
+			continue
+		}
+
+		for _, column := range v.Columns {
+			if !slices.Contains(columns, column) {
+				out = append(out, fmt.Sprintf("view %s has no column %s", v.Ref(), column))
+			}
+		}
+	}
+
+	return out, nil
+}
+
+// externalTypes returns the types that target's columns use and target does not
+// create, if the dialect can tell, leaving out the tables Config.Ignore names.
+func (e *engine) externalTypes(
+	ctx context.Context,
+	conn *sql.Conn,
+	target *schema.Schema,
+) ([]schema.ExternalType, error) {
+	d, ok := e.d.(schema.ExternalTypes)
+	if !ok {
+		return nil, nil
+	}
+
+	kept, err := prune(target, e.config.Ignore)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.ExternalTypes(ctx, conn, kept)
+}
+
+// sayExternal names the types the models use and do not create. The database
+// has them, so they are no drift, but an empty one does not, and a migration
+// made from the models alone fails there (#193).
+func (e *engine) sayExternal(types []schema.ExternalType) {
+	if len(types) == 0 {
+		return
+	}
+
+	e.say("\nThe models name types they do not create, which an empty database lacks:")
+
+	for _, t := range types {
+		what := t.Kind
+
+		if t.Extension != "" {
+			what = "from extension " + t.Extension
+		}
+
+		e.say("  %s, %s: %s", t.Name, what, strings.Join(t.Columns, ", "))
+	}
+
+	e.say(
+		"A migration made from the models alone fails without them: create them in one of " +
+			"your own (diff --empty) before the tables that use them, or adopt the database's dump.",
+	)
 }
 
 // serialSequenceChanges reports different explicit serial defaults separately
@@ -542,6 +673,18 @@ func prune(s *schema.Schema, patterns []string) (*schema.Schema, error) {
 		out.Tables,
 		func(t *schema.Table) bool { return matches(t.Ref().String()) },
 	)
+
+	out.Views = slices.DeleteFunc(
+		out.Views,
+		func(v *schema.View) bool { return matches(v.Ref().String()) },
+	)
+
+	for _, v := range out.Views {
+		v.Columns = slices.DeleteFunc(
+			v.Columns,
+			func(column string) bool { return matches(v.Name + "." + column) },
+		)
+	}
 
 	for _, t := range out.Tables {
 		object := func(name string) bool { return matches(t.Name + "." + name) }

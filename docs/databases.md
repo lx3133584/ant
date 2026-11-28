@@ -51,7 +51,7 @@ Error helpers mean the same everywhere. `ant.IsUniqueViolation` works on all fiv
 
 **Generated keys.** MySQL has no `RETURNING`, so a key comes from `LastInsertId`, and other database-filled columns are read back with a second query. Rows with generated keys go in one at a time there, in both `SaveChanges` and `InsertMany`. That query finds the row by its key, so a model with no key keeps the zero values it was given in its database-filled columns there, and a key the database fills other than through `AUTO_INCREMENT` (a `Default` on the key) is refused with `ErrUnsupported`.
 
-**`ON DUPLICATE KEY` on MySQL and MariaDB.** It has no target: any unique key triggers it, not only the columns you name. If a different key is the one that collides, `Upsert` cannot find the row by your columns, and reports that it wrote nothing. Name the only unique key that can collide. It also takes no `WHERE`, but an `Upsert` of a copy that carries a version checks it all the same: each assignment keeps the stored value unless the version matches, and a copy that is out of date changes nothing and gets `ErrConcurrency`. This reads the affected-row count, so leave the driver's `clientFoundRows` off, as it is by default.
+**`ON DUPLICATE KEY` on MySQL and MariaDB.** It has no target: any unique key triggers it, not only the columns you name. If a different key is the one that collides, `Upsert` cannot find the row by your columns, and reports that it wrote nothing. Name the only unique key that can collide. It also takes no `WHERE`, but an `Upsert` of a copy that carries a version checks it all the same: each assignment keeps the stored value unless the version matches, and a copy that is out of date changes nothing and gets `ErrConcurrency`. This reads the affected-row count, so leave the driver's `clientFoundRows` off, as it is by default. `InsertFrom` with `WithConflict` reads its rows from a derived table there, with columns renamed, since the update would take a column of the `SELECT` named as the table's for the table's own.
 
 **Affected rows on MySQL and MariaDB.** The driver counts the rows an `UPDATE` changed, not the rows it matched, so a write that matches a row and leaves every value as it was counts zero. `SaveChanges` reads that count, and tells the two apart by asking whether the row is still there under the same conditions the write carried: a row still there saves successfully, so a put whose body equals the row is not a conflict. A bulk `Update`, and `UpdateMany`, return the count as the database gives it, so their `n` is the rows they changed rather than the rows they matched there: `if n == 0 { not found }` is wrong on these two, and `n` can be smaller than the number of rows the condition selected. Both follow the driver's count, so `clientFoundRows` would change the second and break the first, as the upsert above explains.
 
@@ -59,7 +59,7 @@ Error helpers mean the same everywhere. `ant.IsUniqueViolation` works on all fiv
 
 **`OUTPUT` on SQL Server.** SQL Server refuses it on a table with triggers, so a model that needs a key back cannot be inserted into one.
 
-**Upserts on SQL Server.** There is no `ON CONFLICT`. Use `ant.Merge`, which ant writes with `WITH (HOLDLOCK)` there: without it, two `MERGE`s at once can both find no row, and both insert it.
+**Upserts on SQL Server.** There is no `ON CONFLICT`, so `Upsert`, and `InsertMany` and `InsertFrom` with `WithConflict`, return `ErrUnsupported`. Use `ant.Merge`, which ant writes with `WITH (HOLDLOCK)` there: without it, two `MERGE`s at once can both find no row, and both insert it.
 
 **`MERGE` at once on PostgreSQL.** PostgreSQL's own documentation says a `MERGE` that inserts a row another one inserted meanwhile fails with a unique violation, which the application retries. `Upsert` has no such failure there.
 
@@ -104,6 +104,18 @@ Error helpers mean the same everywhere. `ant.IsUniqueViolation` works on all fiv
 - A map with string keys reads JSON with `json.Number` for the numbers in its interfaces, as `ant.JSON` does, so a large integer keeps its digits.
 
 **Times.** SQLite stores times as text, and SQL Server's `DATETIME2` has no zone, so ant binds UTC on both to keep one clock, whatever holds the time: `*time.Time`, `sql.NullTime`, an `sql.Null` of a time, a pointer to one, or an interface holding one, types built on them such as `ant.DeletedAt`, and arguments of raw queries, each element of an `IN` list included. A `driver.Valuer` of your own is passed as it is, so have it give a time in UTC. MySQL's driver does the same. A time read back is held in UTC on every database, in each of those shapes, though pgx decodes `TIMESTAMPTZ` in the process's zone. `ant.Past` and `ant.Future` compare with the server's own clock, so run the server in UTC. On SQLite and MySQL, `CURRENT_TIMESTAMP` has whole seconds.
+
+**Text comparison.** Each database compares text by the column's collation, and the defaults differ, so the same `Eq`, `Like` and unique index match different rows. Measured on each server's default, with `José` and `ant` stored:
+
+| | `Eq(&Name, "jose")` finds `José` | `Eq(&Name, "ANT")` finds `ant` | `Like(&Name, "JOS%")` finds `José` | A unique `ant@x.io` refuses `ANT@x.io` |
+|---|---|---|---|---|
+| PostgreSQL | No | No | No | No |
+| MySQL, `utf8mb4_0900_ai_ci` | Yes | Yes | Yes | Yes |
+| MariaDB, `utf8mb4_uca1400_ai_ci` | Yes | Yes | Yes | Yes |
+| SQLite, `BINARY` | No | No | Yes, ASCII letters only | No |
+| SQL Server, `SQL_Latin1_General_CP1_CI_AS` | No | Yes | Yes | Yes |
+
+`ILike` ignores case on every database: natively on PostgreSQL, and as `LOWER(column) LIKE LOWER(pattern)` on the others. SQLite's `LOWER` folds ASCII letters only, so there `ILike(&Name, "JOSÉ")` does not find `José`. Accents count on PostgreSQL, SQLite and SQL Server, and not under MySQL's and MariaDB's defaults. For the same rows everywhere, give the column the collation you mean in its DDL, or store a normalized copy, such as an email in lower case, and compare that. `Collate` sets one for a single comparison, by a name each database spells its own way.
 
 **Parameters.** Limits differ: 65,535 on PostgreSQL and MySQL, 32,766 on SQLite, and about 2,100 on SQL Server, where ant stays at 2,000. `InsertMany`, `SaveChanges`, and `Include` split their work to fit. Your own `In` with a long list does not.
 
