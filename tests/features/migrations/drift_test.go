@@ -112,6 +112,217 @@ func TestDrift(t *testing.T) {
 	})
 }
 
+// Film names a domain and a composite type, which the database has and the
+// models do not create, and an enum, which they do.
+type Film struct {
+	ID          int64
+	Title       string
+	ReleaseYear int64
+	Years       []int64
+	Pair        string
+	Code        string
+	Kind        string
+}
+
+func (Film) Configure(b *ant.ModelBuilder[Film]) {
+	b.Column(&Films.ReleaseYear).Type("year")
+	b.Column(&Films.Years).Type("year[]")
+	b.Column(&Films.Pair).Type("pair")
+	b.Column(&Films.Code).Type("film_code")
+	b.Column(&Films.Kind).Enum("film_kind", "short", "feature")
+}
+
+var Films = ant.Fields[Film]()
+
+type FilmDB struct {
+	ant.Context
+	Films ant.Table[Film]
+}
+
+// A database that matches the models is no drift, but a type the models use
+// and do not create is not in an empty database, so a migration made from the
+// models alone fails there. drift names such types (#193).
+func TestDriftNamesTypesTheModelsDoNotCreate(t *testing.T) {
+	each(t, func(t *testing.T, p *project) {
+		p.sql("CREATE DOMAIN year AS integer CHECK (VALUE BETWEEN 1901 AND 2155)")
+		p.sql("CREATE TYPE pair AS (a integer, b integer)")
+		p.sql("CREATE DOMAIN film_code AS text")
+		// Marking the dependency stands in for an extension's type, as in
+		// TestDriftSkipsExtensionTables.
+		p.sql(
+			`INSERT INTO pg_depend (classid, objid, objsubid, refclassid, refobjid, refobjsubid, deptype)
+			SELECT 'pg_type'::regclass, 'film_code'::regtype, 0, 'pg_extension'::regclass, oid, 0, 'e'
+			FROM pg_extension WHERE extname = 'plpgsql'`,
+		)
+
+		t.Cleanup(func() {
+			_, _ = p.target.DB.ExecContext(
+				context.Background(),
+				"DELETE FROM pg_depend WHERE deptype = 'e' AND objid = 'film_code'::regtype",
+			)
+		})
+
+		must[FilmDB](p, "diff", "start")
+		must[FilmDB](p, "up")
+
+		out := must[FilmDB](p, "drift")
+		require.Contains(t, out, "No drift")
+		require.Contains(t, out, "The models name types they do not create")
+		require.Contains(t, out, "year, a domain: films.release_year, films.years")
+		require.Contains(t, out, "pair, a composite type: films.pair")
+		require.Contains(t, out, "film_code, from extension plpgsql: films.code")
+		require.Contains(t, out, "diff --empty")
+		require.NotContains(t, out, "film_kind", "the models create it")
+		require.NotContains(t, out, "bigint", "PostgreSQL has it")
+	})
+}
+
+// viewSchema holds a materialized view that TestDriftComparesViewModels reads.
+// No table is in it.
+const viewSchema = "ant_view_reports"
+
+// Subscriber is a table the views read.
+type Subscriber struct {
+	ID     int64
+	ListID int64
+	Name   string
+}
+
+// ListStat reads a view.
+type ListStat struct {
+	ListID          int64
+	SubscriberCount int64
+}
+
+func (ListStat) Configure(b *ant.ModelBuilder[ListStat]) {
+	b.View("list_stats")
+	b.NoKey()
+}
+
+// YearlyStat reads a materialized view in a schema of its own.
+type YearlyStat struct {
+	Year  int64
+	Total int64
+}
+
+func (YearlyStat) Configure(b *ant.ModelBuilder[YearlyStat]) {
+	b.Schema(viewSchema)
+	b.View("yearly_stats")
+	b.NoKey()
+}
+
+// SubscriberName reads the subscribers table without writing it.
+type SubscriberName struct {
+	ID   int64
+	Name string
+}
+
+func (SubscriberName) Configure(b *ant.ModelBuilder[SubscriberName]) {
+	b.View("subscribers")
+}
+
+type StatDB struct {
+	ant.Context
+	Subscribers ant.Table[Subscriber]
+	ListStats   ant.Table[ListStat]
+	YearlyStats ant.Table[YearlyStat]
+	Names       ant.Table[SubscriberName]
+}
+
+// SubscriberNick reads a column that the subscribers table does not have.
+type SubscriberNick struct {
+	ID   int64
+	Nick string
+}
+
+func (SubscriberNick) Configure(b *ant.ModelBuilder[SubscriberNick]) {
+	b.View("subscribers")
+}
+
+type NickDB struct {
+	ant.Context
+	Subscribers ant.Table[Subscriber]
+	Nicks       ant.Table[SubscriberNick]
+}
+
+// Migrations do not create views: their SQL lives in the code folder. drift
+// still checks that each view a model reads is there with the columns the model
+// reads, since a query fails without them (#232).
+func TestDriftComparesViewModels(t *testing.T) {
+	each(t, func(t *testing.T, p *project) {
+		dropSchemaAfter(p, viewSchema)
+
+		t.Run("a view that is not there is drift, before any snapshot too", func(t *testing.T) {
+			out, err := run[StatDB](p, "drift")
+			require.ErrorIs(t, err, migrate.ErrDrift)
+			require.Contains(t, out, "view list_stats is missing")
+			require.Contains(t, out, "view "+viewSchema+".yearly_stats is missing")
+			require.NotContains(t, out, "view subscribers", "the models create that table")
+		})
+
+		p.write(
+			"code/stats.sql",
+			`CREATE OR REPLACE VIEW list_stats AS
+				SELECT list_id, count(*) AS subscriber_count, max(name) AS last_name
+				FROM subscribers GROUP BY list_id;
+			CREATE SCHEMA IF NOT EXISTS `+viewSchema+`;
+			CREATE MATERIALIZED VIEW IF NOT EXISTS `+viewSchema+`.yearly_stats AS
+				SELECT 2026::bigint AS year, count(*) AS total FROM subscribers;`,
+		)
+
+		must[StatDB](p, "diff", "start")
+		must[StatDB](p, "up")
+
+		t.Run("views with the columns the models read are no drift", func(t *testing.T) {
+			require.Contains(t, must[StatDB](p, "drift"), "No drift")
+			require.NotContains(t, p.read("versions/schema.snapshot.json"), "list_stats")
+		})
+
+		p.sql("DROP VIEW list_stats")
+
+		p.sql(
+			"CREATE VIEW list_stats AS SELECT list_id, count(*) AS subscriber_cnt FROM subscribers GROUP BY list_id",
+		)
+
+		t.Run("a column the view lacks is drift", func(t *testing.T) {
+			out, err := run[StatDB](p, "drift")
+			require.ErrorIs(t, err, migrate.ErrDrift)
+			require.ErrorContains(t, err, "1 difference")
+			require.Contains(t, out, "view list_stats has no column subscriber_count")
+			require.NotContains(t, out, "To match", "the tables match")
+		})
+
+		t.Run("unless Config.Ignore names the view or the column", func(t *testing.T) {
+			for _, pattern := range []string{"list_*", "list_stats.subscriber_count"} {
+				p.config.Ignore = []string{pattern}
+				require.Contains(t, must[StatDB](p, "drift"), "No drift", pattern)
+			}
+
+			p.config.Ignore = nil
+		})
+
+		t.Run(
+			"a read-only model of a table the models create reads what migrations make of it",
+			func(t *testing.T) {
+				out, err := run[NickDB](p, "drift")
+				require.ErrorIs(t, err, migrate.ErrDrift)
+				require.ErrorContains(t, err, "1 difference")
+				require.Contains(t, out, "view subscribers has no column nick")
+			},
+		)
+
+		t.Run("a view with no columns is there, without the columns", func(t *testing.T) {
+			p.sql("DROP VIEW list_stats")
+			p.sql("CREATE VIEW list_stats AS SELECT")
+			out, err := run[StatDB](p, "drift")
+			require.ErrorIs(t, err, migrate.ErrDrift)
+			require.Contains(t, out, "view list_stats has no column list_id")
+			require.Contains(t, out, "view list_stats has no column subscriber_count")
+			require.NotContains(t, out, "list_stats is missing")
+		})
+	})
+}
+
 // Things outside the schema's reach are not reported: tables ant does not manage
 // are named, and history is not drift.
 func TestDriftIgnores(t *testing.T) {
@@ -223,12 +434,24 @@ func (Log) Configure(b *ant.ModelBuilder[Log]) {
 	b.ExcludeFromMigrations()
 }
 
+// RackName is a view in the default schema.
+type RackName struct {
+	ID   int64
+	Name string
+}
+
+func (RackName) Configure(b *ant.ModelBuilder[RackName]) {
+	b.Schema(explicitSchema)
+	b.View("rack_names")
+}
+
 // ArchiveDB holds them.
 type ArchiveDB struct {
 	ant.Context
 	Racks   ant.Table[Rack]
 	Volumes ant.Table[Volume]
 	Logs    ant.Table[Log]
+	Names   ant.Table[RackName]
 }
 
 // Volumes is Volume's probe.
@@ -264,7 +487,21 @@ func TestDriftExplicitDefaultSchema(t *testing.T) {
 		must[ArchiveDB](p, "diff", "start")
 		must[ArchiveDB](p, "up")
 
+		p.sql(
+			"CREATE VIEW " + explicitSchema + ".rack_names AS SELECT id, name FROM " + explicitSchema + ".racks",
+		)
+
 		require.Contains(t, must[ArchiveDB](p, "drift"), "No drift")
+
+		t.Run("Config.Ignore names a view there without the schema", func(t *testing.T) {
+			p.sql("DROP VIEW " + explicitSchema + ".rack_names")
+			_, err := run[ArchiveDB](p, "drift")
+			require.ErrorIs(t, err, migrate.ErrDrift)
+
+			p.config.Ignore = []string{"rack_names"}
+			require.Contains(t, must[ArchiveDB](p, "drift"), "No drift")
+			p.config.Ignore = nil
+		})
 
 		t.Run("EnsureCreated leaves the tables alone", func(t *testing.T) {
 			db := open[ArchiveDB](p)

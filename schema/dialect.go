@@ -99,15 +99,46 @@ type Dialect interface {
 	Summary(ctx context.Context, q Querier) (*Summary, error)
 }
 
-// Summary is a short description of a live database.
-type Summary struct {
-	Version string
-	Name    string
-	Size    string
-	Tables  []TableSummary
+// ExternalTypes is implemented by a dialect that can tell which types the
+// columns of a schema use that neither the schema nor the database itself makes,
+// such as a domain, a composite type, or an extension's type. A migration made
+// from the schema alone fails on an empty database without them.
+type ExternalTypes interface {
+	ExternalTypes(ctx context.Context, q Querier, s *Schema) ([]ExternalType, error)
 }
 
-// TableSummary is one table in a Summary. Rows is the database's estimate.
+// ExternalType is a type that columns use and the schema does not create.
+type ExternalType struct {
+	// Name is the type as the columns name it, without an array's brackets.
+	Name string
+	// Kind says what it is: "a domain", "a composite type", or the like.
+	Kind string
+	// Extension is the extension that makes it, or "".
+	Extension string
+	// Columns are the columns that use it, as table.column.
+	Columns []string
+}
+
+// RelationColumns is implemented by a dialect that can read the columns of a
+// table or view by name, which drift compares with the views that read-only
+// models read.
+type RelationColumns interface {
+	// RelationColumns returns the columns of the relation ref names, found as a
+	// query of it would find it, in their order. ok is false if there is none.
+	RelationColumns(ctx context.Context, q Querier, ref Ref) (columns []string, ok bool, err error)
+}
+
+// Summary is a short description of a live database.
+type Summary struct {
+	Version           string
+	Name              string
+	Size              string
+	Tables            []TableSummary
+	MaterializedViews []TableSummary
+}
+
+// TableSummary is one table or materialized view in a Summary. Rows is the
+// database's estimate.
 type TableSummary struct {
 	Name string
 	Rows int64
