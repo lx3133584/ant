@@ -34,3 +34,18 @@ func TestIsNull(t *testing.T) {
 		})
 	})
 }
+
+// A condition on a relation names the field, so a long chain can be bisected
+// without guessing which one it was.
+func TestRelationConditionNamesTheField(t *testing.T) {
+	fixture.Run(t, func(t *testing.T, db *fixture.AppDB) {
+		ctx := t.Context()
+
+		_, err := db.Users.Where(
+			ant.Eq(&Users.Name, "x"),
+			ant.IsNull(&Users.Posts),
+		).All(ctx)
+		require.ErrorIs(t, err, ant.ErrNotColumn)
+		require.ErrorContains(t, err, "User.Posts")
+	})
+}

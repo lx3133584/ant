@@ -107,6 +107,7 @@ func TestMultiJoin(t *testing.T) {
 			_, err := db.Comments.Join(&Entries.Writer).
 				Select(func(c *Comment, w *Writer) string { return "" }).All(ctx)
 			require.ErrorIs(t, err, ant.ErrWrongModel)
+			require.ErrorContains(t, err, "Entry.Writer in a query of Comment")
 		})
 	})
 }

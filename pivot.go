@@ -35,7 +35,7 @@ func pivotKeys[T, R any](
 	case err != nil:
 		return nil, nil, nil, nil, err
 	case r.Owner != model:
-		return nil, nil, nil, nil, ErrWrongModel
+		return nil, nil, nil, nil, wrongRelation(r, model)
 	case r.Pivot == nil:
 		return nil, nil, nil, nil, fmt.Errorf("%w: %s", ErrNotManyToMany, r.Name)
 	}

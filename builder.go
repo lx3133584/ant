@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/skudra-go/ant/internal/meta"
@@ -167,7 +168,7 @@ func (b *builder) addSource(s source, kind qb.JoinKind) source {
 func joinRelation(b *builder, kind qb.JoinKind, target source, r *meta.Relation, link meta.Link) {
 	owner, ok := b.sourceFor(r.Owner)
 	if !ok {
-		b.fail(ErrWrongModel)
+		b.fail(b.wrongModel(r.Owner, r.Name))
 
 		return
 	}
@@ -265,6 +266,18 @@ func joinOn(b *builder, kind qb.JoinKind, target source, conds []Cond) {
 
 // ready returns every error that stops the query from running.
 func (b *builder) ready() error {
+	err := b.faults()
+
+	if ref := b.outside(); ref != nil {
+		return errors.Join(err, b.wrongModel(ref, b.fieldUsed(ref)))
+	}
+
+	return err
+}
+
+// faults returns the errors ready returns, but for a reference to a model
+// outside the query.
+func (b *builder) faults() error {
 	err := b.err
 
 	if b.state == nil {
@@ -275,13 +288,105 @@ func (b *builder) ready() error {
 		err = errors.Join(err, s.model.Err())
 	}
 
+	return err
+}
+
+// outside returns the first model the query refers to and does not read from,
+// or nil when it reads from them all.
+func (b *builder) outside() *meta.Model {
 	for _, ref := range b.refs {
 		if _, ok := b.sourceFor(ref); !ok {
-			return errors.Join(err, ErrWrongModel)
+			return ref
 		}
 	}
 
-	return err
+	return nil
+}
+
+// wrongModel is the error for a reference to m, a model outside the query. It
+// names the field or the relation that was used, as Post.Rank, so a long chain
+// is not bisected to find it (#166), or the model alone when what is empty.
+func (b *builder) wrongModel(m *meta.Model, what string) error {
+	name := m.Type.Name()
+
+	if what != "" {
+		name += "." + what
+	}
+
+	return fmt.Errorf("%w: %s in a query of %s", ErrWrongModel, name, b.queryNames())
+}
+
+// fieldUsed returns the name of a field of m that a condition, an ordering or a
+// grouping of the query reads, or "" when none of them does: an assignment and
+// what a subquery reads from outside it are not looked into. It runs only once
+// the query has failed, so what a query carries stays the models it refers to.
+func (b *builder) fieldUsed(m *meta.Model) string {
+	for _, c := range b.where {
+		if name := fieldRead(c, m); name != "" {
+			return name
+		}
+	}
+
+	for _, o := range b.order {
+		if name := fieldRead(o.Value, m); name != "" {
+			return name
+		}
+	}
+
+	for _, g := range b.group {
+		if name := fieldRead(g, m); name != "" {
+			return name
+		}
+	}
+
+	for _, c := range b.having {
+		if name := fieldRead(c, m); name != "" {
+			return name
+		}
+	}
+
+	return ""
+}
+
+// fieldRead returns the name of the first field of m that node reads, or "". A
+// column is m's when it is qualified with m's table and m maps a field to it.
+func fieldRead(node any, m *meta.Model) string {
+	name := ""
+
+	reads(node, func(c qb.Column) bool {
+		if c.Table == nil || m.Table == nil || c.Table.Name != m.Table.Name {
+			return false
+		}
+
+		f := m.Column(c.Name)
+		if f == nil {
+			return false
+		}
+
+		name = f.Name
+
+		return true
+	})
+
+	return name
+}
+
+// queryNames lists the models the query reads from, for an error that has to
+// say which model the offending field belonged to and which was expected.
+func (b *builder) queryNames() string {
+	names := make([]string, 0, len(b.sources))
+
+	for _, s := range b.sources {
+		if s.model != nil {
+			names = append(names, s.model.Type.Name())
+		}
+	}
+
+	if len(names) == 0 {
+		return "no model"
+	}
+
+	return strings.Join(names, ", ")
 }
 
 // filters returns a source's global filters, resolved at render time.

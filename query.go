@@ -451,6 +451,70 @@ func (q *Query[T]) selection() []qb.Selected {
 	return append(out, q.computed...)
 }
 
+// ready is the builder's ready, which names a field of a model outside the
+// query from its conditions and orderings. A Query also holds the columns it
+// chose and the relations it includes, so one of those is named too.
+func (q *Query[T]) ready() error {
+	err := q.faults()
+
+	ref := q.outside()
+	if ref == nil {
+		return err
+	}
+
+	what := q.fieldUsed(ref)
+	if what == "" {
+		what = q.chosen(ref)
+	}
+
+	return errors.Join(err, q.wrongModel(ref, what))
+}
+
+// chosen returns the name of a field of m among the columns the query chose or
+// left out, or of a relation of m among those it includes, or "".
+func (q *Query[T]) chosen(m *meta.Model) string {
+	for _, fields := range [][]*meta.Field{q.selected, q.omitted} {
+		for _, f := range fields {
+			if m.Has(f) {
+				return f.Name
+			}
+		}
+	}
+
+	for _, c := range q.computed {
+		// The field With fills is kept by its column alone. It is m's when m
+		// maps a field to that column and no model the query reads from does.
+		if f := m.Column(c.Alias); f != nil && !q.maps(c.Alias) {
+			return f.Name
+		}
+
+		if name := fieldRead(c.Value, m); name != "" {
+			return name
+		}
+	}
+
+	for _, inc := range q.includes {
+		if inc.relation.Owner == m {
+			return inc.relation.Name
+		}
+	}
+
+	for _, inc := range q.inJoin {
+		if inc.relation.Owner == m {
+			return inc.relation.Name
+		}
+	}
+
+	return ""
+}
+
+// maps reports whether a model the query reads from maps a field to column.
+func (q *Query[T]) maps(column string) bool {
+	return slices.ContainsFunc(q.sources, func(s source) bool {
+		return s.model != nil && s.model.Column(column) != nil
+	})
+}
+
 func (q *Query[T]) readyToRead() error {
 	if err := q.ready(); err != nil {
 		return err
@@ -1020,7 +1084,21 @@ func (q *Query[T]) update(a []Assignment) (*qb.Update, *Query[T], error) {
 			continue
 		}
 
-		n.refs = append(append(n.refs, assignment.model), assignment.refs...)
+		// Every join is in by now, so an assignment to another model's field is
+		// said here, where its field is still known, rather than by ready.
+		if _, ok := n.sourceFor(assignment.model); !ok {
+			what := ""
+
+			if f := assignment.model.Column(assignment.node.Column); f != nil {
+				what = f.Name
+			}
+
+			n.fail(n.wrongModel(assignment.model, what))
+
+			continue
+		}
+
+		n.refs = append(n.refs, assignment.refs...)
 		set = append(set, assignment.node)
 	}
 
@@ -1421,7 +1499,7 @@ func recursive[T, V any](q *Query[T], rel *V) *Query[T] {
 
 	model := q.model()
 	if r.Owner != model {
-		out.fail(ErrWrongModel)
+		out.fail(out.wrongModel(r.Owner, r.Name))
 
 		return out
 	}
